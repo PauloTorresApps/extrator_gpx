@@ -61,38 +61,44 @@
         .input-group .text-label { font-weight: bold; flex-basis: 150px; flex-shrink: 0; }
         .file-info { font-style: italic; color: #aaa; flex-grow: 1; }
         
-        /* --- Estilos para a Grelha de Posição do Overlay --- */
-        .position-selector-container {
-            display: flex;
-            align-items: center;
-            gap: 2rem;
-            padding: 1rem;
-            border: 1px solid var(--border-color);
-            border-radius: 8px;
+        /* ======================================================= */
+        /* INÍCIO: NOVOS Estilos para a Grelha de Posição do Overlay */
+        /* ======================================================= */
+        #position-selector { /* Este é o nosso wrapper */
+            display: none; /* Controlado por JS */
+            justify-content: center; /* Centraliza a caixa no espaço disponível */
+            width: 100%;
         }
-        .position-selector-container legend {
+        .position-container { /* Este é o <fieldset> quadrado */
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            padding: 6px; /* O padding de 6px que você pediu */
+            width: fit-content; /* Faz a caixa se ajustar ao conteúdo */
+        }
+        .position-container legend {
             color: var(--primary-color);
             font-weight: bold;
-            flex-shrink: 0;
+            padding: 0 0.5rem; /* Espaçamento horizontal para o texto */
+            margin-left: 1rem; /* Afasta um pouco da borda esquerda */
         }
         .position-grid {
             display: grid;
             grid-template-columns: 60px 60px;
             grid-template-rows: 60px 60px;
-            gap: 8px;
+            gap: 6px;
         }
         .position-grid input[type="radio"] {
             display: none;
         }
-        .position-grid-cell {
-            border: 2px solid var(--border-color);
-            border-radius: 6px;
+        .position-grid-cell { /* Esta é a <label> clicável */
+            border-radius: 8px;
             cursor: pointer;
             display: flex;
             align-items: center;
             justify-content: center;
             color: var(--text-color);
             transition: all 0.2s ease-in-out;
+            border: 2px solid transparent; /* Bordas transparentes para evitar 'pulos' no hover */
         }
         .position-grid-cell svg {
             width: 32px;
@@ -100,18 +106,15 @@
             transition: transform 0.2s ease;
         }
         .position-grid-cell:hover {
-            border-color: var(--secondary-color);
-            color: var(--secondary-color);
-        }
-        .position-grid-cell:hover svg {
-            transform: scale(1.1);
+            background-color: #333;
         }
         /* Estilo para a célula SELECIONADA */
         .position-grid-cell:has(input:checked) {
             background-color: var(--primary-color);
-            border-color: var(--primary-color);
             color: var(--bg-color);
+            border-color: var(--primary-color);
         }
+        /* FIM: NOVOS Estilos */
     </style>
 </head>
 <body>
@@ -136,28 +139,29 @@
             <span id="video-info" class="file-info"></span>
         </div>
 
-        <div id="position-selector" class="position-selector-container" style="display: none;">
-            <legend>3. Posição do Overlay</legend>
-            <div class="position-grid">
-                <label class="position-grid-cell">
-                    <input type="radio" name="overlayPosition" value="top-left">
-                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><path d="M12 4 L10.59 5.41 L16.17 11 H4 V13 H16.17 L10.59 18.59 L12 20 L20 12 Z" transform="rotate(-135 12 12)"/></svg>
-                </label>
-                <label class="position-grid-cell">
-                    <input type="radio" name="overlayPosition" value="top-right">
-                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><path d="M12 4 L10.59 5.41 L16.17 11 H4 V13 H16.17 L10.59 18.59 L12 20 L20 12 Z" transform="rotate(-45 12 12)"/></svg>
-                </label>
-                <label class="position-grid-cell">
-                    <input type="radio" name="overlayPosition" value="bottom-left" checked>
-                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><path d="M12 4 L10.59 5.41 L16.17 11 H4 V13 H16.17 L10.59 18.59 L12 20 L20 12 Z" transform="rotate(135 12 12)"/></svg>
-                </label>
-                <label class="position-grid-cell">
-                    <input type="radio" name="overlayPosition" value="bottom-right">
-                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><path d="M12 4 L10.59 5.41 L16.17 11 H4 V13 H16.17 L10.59 18.59 L12 20 L20 12 Z" transform="rotate(45 12 12)"/></svg>
-                </label>
-            </div>
+        <div id="position-selector">
+            <fieldset class="position-container">
+                <legend>3. Posição do Overlay</legend>
+                <div class="position-grid">
+                    <label class="position-grid-cell">
+                        <input type="radio" name="overlayPosition" value="top-left">
+                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><path d="M12 4 L10.59 5.41 L16.17 11 H4 V13 H16.17 L10.59 18.59 L12 20 L20 12 Z" transform="rotate(-135 12 12)"/></svg>
+                    </label>
+                    <label class="position-grid-cell">
+                        <input type="radio" name="overlayPosition" value="top-right">
+                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><path d="M12 4 L10.59 5.41 L16.17 11 H4 V13 H16.17 L10.59 18.59 L12 20 L20 12 Z" transform="rotate(-45 12 12)"/></svg>
+                    </label>
+                    <label class="position-grid-cell">
+                        <input type="radio" name="overlayPosition" value="bottom-left" checked>
+                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><path d="M12 4 L10.59 5.41 L16.17 11 H4 V13 H16.17 L10.59 18.59 L12 20 L20 12 Z" transform="rotate(135 12 12)"/></svg>
+                    </label>
+                    <label class="position-grid-cell">
+                        <input type="radio" name="overlayPosition" value="bottom-right">
+                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><path d="M12 4 L10.59 5.41 L16.17 11 H4 V13 H16.17 L10.59 18.59 L12 20 L20 12 Z" transform="rotate(45 12 12)"/></svg>
+                    </label>
+                </div>
+            </fieldset>
         </div>
-
         <button id="generate-btn" style="display: none;">4. Confirmar e Gerar Vídeo</button>
         
         <div id="progress-container"><div id="progress-bar">0%</div></div>
