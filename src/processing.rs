@@ -15,7 +15,6 @@ pub struct FrameInfo {
     timestamp_sec: f64,
 }
 
-// A função já não aceita o `time_offset_seconds`
 pub fn run_processing(gpx_path: PathBuf, video_path: PathBuf) -> Result<Vec<String>, (String, Vec<String>)> {
     let mut logs = Vec::new();
     
@@ -34,8 +33,9 @@ pub fn run_processing(gpx_path: PathBuf, video_path: PathBuf) -> Result<Vec<Stri
 
 fn process_internal(gpx_path: PathBuf, video_path: PathBuf, logs: &mut Vec<String>) -> Result<(), Box<dyn Error>> {
     let output_dir = "output_frames";
-    logs.push(format!("A criar diretório de saída: {}", output_dir));
+    let final_video_dir = "output";
     fs::create_dir_all(output_dir)?;
+    fs::create_dir_all(final_video_dir)?;
 
     logs.push(format!("A ler metadados do vídeo: {:?}", video_path));
     let (video_start_time, video_end_time) = get_video_time_range(&video_path)?;
@@ -47,7 +47,7 @@ fn process_internal(gpx_path: PathBuf, video_path: PathBuf, logs: &mut Vec<Strin
     logs.push("Ficheiro GPX lido com sucesso!".to_string());
     
     let mut frame_infos: Vec<FrameInfo> = Vec::new();
-    let mut frame_counter = 0; // Contador global de frames
+    let mut frame_counter = 0;
 
     for (track_idx, track) in gpx.tracks.iter().enumerate() {
         logs.push(format!("A processar Trilha #{}", track_idx + 1));
@@ -57,7 +57,6 @@ fn process_internal(gpx_path: PathBuf, video_path: PathBuf, logs: &mut Vec<Strin
             let synced_points: Vec<&Waypoint> = segment.points.iter().filter(|point| {
                 if let Some(time_str) = point.time.as_ref().and_then(|t| t.format().ok()) {
                     if let Ok(point_time) = time_str.parse::<DateTime<Utc>>() {
-                        // Volta a usar o ajuste de tempo fixo.
                         let adjusted_point_time = point_time - Duration::hours(3);
                         adjusted_point_time >= video_start_time && adjusted_point_time <= video_end_time
                     } else { false }
@@ -65,10 +64,10 @@ fn process_internal(gpx_path: PathBuf, video_path: PathBuf, logs: &mut Vec<Strin
             }).collect();
 
             if synced_points.len() < 3 {
-                logs.push("Pontos de telemetria insuficientes (< 3) para processar este segmento.".to_string());
+                logs.push("Pontos de telemetria insuficientes (< 3).".to_string());
                 continue;
             }
-            logs.push(format!("Encontrados {} pontos sincronizados. A gerar imagens...", synced_points.len()));
+            logs.push(format!("Encontrados {} pontos. A gerar imagens...", synced_points.len()));
 
             for i in 1..synced_points.len() - 1 {
                 let p1 = synced_points[i - 1];
@@ -91,16 +90,16 @@ fn process_internal(gpx_path: PathBuf, video_path: PathBuf, logs: &mut Vec<Strin
                     }
                 }
             }
-            logs.push("Geração de imagens para este segmento concluída!".to_string());
+            logs.push("Geração de imagens concluída!".to_string());
         }
     }
 
     if !frame_infos.is_empty() {
-        logs.push("A gerar o vídeo final com todos os overlays (pode demorar)...".to_string());
+        logs.push("A gerar o vídeo final...".to_string());
         generate_final_video(&video_path, &frame_infos)?;
-        logs.push("Vídeo final 'output_video.mp4' gerado com sucesso!".to_string());
+        logs.push("Vídeo final gerado com sucesso!".to_string());
     } else {
-        logs.push("Nenhum frame foi gerado, o vídeo final não será criado.".to_string());
+        logs.push("Nenhum frame foi gerado.".to_string());
     }
 
     Ok(())
@@ -129,7 +128,7 @@ fn generate_final_video(video_path: &Path, frame_infos: &[FrameInfo]) -> Result<
         if i < frame_infos.len() - 1 { complex_filter.push(';'); last_stream = current_stream; }
     }
 
-    let output_file = "output_video.mp4";
+    let output_file = "output/output_video.mp4";
     if Path::new(output_file).exists() { fs::remove_file(output_file)?; }
 
     let status = StdCommand::new("ffmpeg").args(&inputs).arg("-filter_complex").arg(&complex_filter).arg("-c:a").arg("copy").arg(output_file).status()?;

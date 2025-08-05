@@ -17,6 +17,11 @@ image = "0.24"
 imageproc = "0.23"
 rusttype = "0.9"
 
-# Novas dependências para a Interface Gráfica (GUI)
-iced = { version = "0.12", features = ["tokio"] }
-rfd = "0.14" # Para abrir diálogos de seleção de ficheiro
+# Novas dependências para o Servidor Web (Backend)
+tokio = { version = "1", features = ["full"] }
+axum = { version = "0.7", features = ["multipart"] }
+tower-http = { version = "0.5.0", features = ["fs", "cors"] }
+serde = { version = "1.0", features = ["derive"] }
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+uuid = { version = "1.8", features = ["v4"] }
