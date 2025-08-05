@@ -4,10 +4,8 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>GPX Video Sync & Overlay</title>
-    <!-- Leaflet.js para o mapa -->
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-    <!-- Usa a biblioteca GPX Parser sugerida pelo utilizador -->
     <script src="https://cdn.jsdelivr.net/npm/gpxparser@3.0.8/dist/GPXParser.min.js"></script>
 
     <style>
@@ -27,7 +25,7 @@
             padding: 2rem 0;
             display: flex;
             justify-content: center;
-            align-items: flex-start; /* Alinhado ao topo para scroll */
+            align-items: flex-start;
             min-height: 100vh;
         }
         #app {
@@ -42,21 +40,9 @@
             gap: 1.5rem;
         }
         h1 { text-align: center; color: var(--primary-color); margin-top: 0;}
-        
-        button {
-            padding: 0.8rem 1.5rem;
-            background-color: var(--primary-color);
-            color: #121212;
-            border: none;
-            border-radius: 4px;
-            font-size: 1rem;
-            font-weight: bold;
-            cursor: pointer;
-            transition: background-color 0.3s;
-        }
+        button { padding: 0.8rem 1.5rem; background-color: var(--primary-color); color: #121212; border: none; border-radius: 4px; font-size: 1rem; font-weight: bold; cursor: pointer; transition: background-color 0.3s; }
         button:disabled { background-color: var(--border-color); cursor: not-allowed; }
         button:hover:not(:disabled) { background-color: #a36ef4; }
-
         #map { height: 350px; width: 100%; border-radius: 8px; background-color: #333; display: none; }
         #sync-point-info { text-align: center; font-size: 1rem; color: var(--secondary-color); display: none; min-height: 1.2em; }
         #progress-container { width: 100%; background-color: #333; border-radius: 4px; display: none; }
@@ -67,95 +53,64 @@
         #download-link a { color: var(--secondary-color); text-decoration: none; font-weight: bold; font-size: 1.2rem; }
         .track-info { background-color: #2a2a2a; padding: 0.5rem; border-radius: 4px; font-size: 0.9rem; margin-top: 0.5rem; display: none; }
         
-        /* ============================================== */
-        /* NOVO: Estilos para o Input de Ficheiro Customizado */
-        /* ============================================== */
-        input[type="file"] {
-            display: none;
-        }
-        .file-upload-label {
-            background-color: var(--border-color);
-            color: var(--text-color);
-            padding: 0.6rem 1.2rem;
-            border-radius: 4px;
-            cursor: pointer;
-            transition: background-color 0.3s;
-            font-weight: 500;
-            text-align: center;
-        }
-        .file-upload-label:hover {
-            background-color: #555;
-        }
-        .input-group {
+        /* --- Estilos para o Input de Ficheiro Customizado --- */
+        input[type="file"] { display: none; }
+        .file-upload-label { background-color: var(--border-color); color: var(--text-color); padding: 0.6rem 1.2rem; border-radius: 4px; cursor: pointer; transition: background-color 0.3s; font-weight: 500; text-align: center; }
+        .file-upload-label:hover { background-color: #555; }
+        .input-group { display: flex; flex-wrap: wrap; align-items: center; gap: 1rem; }
+        .input-group .text-label { font-weight: bold; flex-basis: 150px; flex-shrink: 0; }
+        .file-info { font-style: italic; color: #aaa; flex-grow: 1; }
+        
+        /* --- Estilos para a Grelha de Posição do Overlay --- */
+        .position-selector-container {
             display: flex;
-            flex-wrap: wrap;
             align-items: center;
-            gap: 1rem;
+            gap: 2rem;
+            padding: 1rem;
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
         }
-        .input-group label.text-label {
+        .position-selector-container legend {
+            color: var(--primary-color);
             font-weight: bold;
-            flex-basis: 150px;
             flex-shrink: 0;
         }
-        .file-info {
-            font-style: italic;
-            color: #aaa;
-            flex-grow: 1;
+        .position-grid {
+            display: grid;
+            grid-template-columns: 60px 60px;
+            grid-template-rows: 60px 60px;
+            gap: 8px;
         }
-        
-        /* ======================================================= */
-        /* NOVO: Estilos para os Botões de Rádio (Posição do Overlay) */
-        /* ======================================================= */
-        .position-selector { display: flex; flex-direction: column; gap: 0.5rem; margin-top: 1rem; }
-        .position-selector fieldset { border: 1px solid var(--border-color); border-radius: 8px; padding: 1rem; }
-        .position-selector legend { color: var(--primary-color); padding: 0 0.5rem; font-weight: bold; }
-        .position-options { display: flex; justify-content: space-around; flex-wrap: wrap; gap: 1rem; }
-        .position-options label {
-            padding: 0.5rem 1rem;
+        .position-grid input[type="radio"] {
+            display: none;
+        }
+        .position-grid-cell {
             border: 2px solid var(--border-color);
             border-radius: 6px;
-            transition: all 0.2s ease-in-out;
+            cursor: pointer;
             display: flex;
             align-items: center;
-            gap: 0.8rem;
-            cursor: pointer;
+            justify-content: center;
+            color: var(--text-color);
+            transition: all 0.2s ease-in-out;
         }
-        .position-options label:hover {
+        .position-grid-cell svg {
+            width: 32px;
+            height: 32px;
+            transition: transform 0.2s ease;
+        }
+        .position-grid-cell:hover {
             border-color: var(--secondary-color);
-        }
-        .position-options input[type="radio"] {
-            display: none;
-        }
-        .custom-radio {
-            width: 18px;
-            height: 18px;
-            border: 2px solid var(--text-color);
-            border-radius: 50%;
-            display: inline-block;
-            position: relative;
-            flex-shrink: 0;
-        }
-        .custom-radio::after {
-            content: '';
-            width: 10px;
-            height: 10px;
-            background: var(--secondary-color);
-            position: absolute;
-            border-radius: 50%;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%) scale(0);
-            transition: transform 0.2s ease-in-out;
-        }
-        .position-options input[type="radio"]:checked + .custom-radio {
-            border-color: var(--secondary-color);
-        }
-        .position-options input[type="radio"]:checked + .custom-radio::after {
-            transform: translate(-50%, -50%) scale(1);
-        }
-        .position-options input[type="radio"]:checked ~ .radio-text {
             color: var(--secondary-color);
-            font-weight: bold;
+        }
+        .position-grid-cell:hover svg {
+            transform: scale(1.1);
+        }
+        /* Estilo para a célula SELECIONADA */
+        .position-grid-cell:has(input:checked) {
+            background-color: var(--primary-color);
+            border-color: var(--primary-color);
+            color: var(--bg-color);
         }
     </style>
 </head>
@@ -181,32 +136,26 @@
             <span id="video-info" class="file-info"></span>
         </div>
 
-        <div id="position-selector" class="position-selector" style="display: none;">
-            <fieldset>
-                <legend>3. Posição do Overlay</legend>
-                <div class="position-options">
-                    <label>
-                        <input type="radio" name="overlayPosition" value="bottom-left" checked>
-                        <span class="custom-radio"></span>
-                        <span class="radio-text">Inferior Esquerdo</span>
-                    </label>
-                    <label>
-                        <input type="radio" name="overlayPosition" value="top-left">
-                        <span class="custom-radio"></span>
-                        <span class="radio-text">Superior Esquerdo</span>
-                    </label>
-                    <label>
-                        <input type="radio" name="overlayPosition" value="top-right">
-                        <span class="custom-radio"></span>
-                        <span class="radio-text">Superior Direito</span>
-                    </label>
-                    <label>
-                        <input type="radio" name="overlayPosition" value="bottom-right">
-                        <span class="custom-radio"></span>
-                        <span class="radio-text">Inferior Direito</span>
-                    </label>
-                </div>
-            </fieldset>
+        <div id="position-selector" class="position-selector-container" style="display: none;">
+            <legend>3. Posição do Overlay</legend>
+            <div class="position-grid">
+                <label class="position-grid-cell">
+                    <input type="radio" name="overlayPosition" value="top-left">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><path d="M12 4 L10.59 5.41 L16.17 11 H4 V13 H16.17 L10.59 18.59 L12 20 L20 12 Z" transform="rotate(-135 12 12)"/></svg>
+                </label>
+                <label class="position-grid-cell">
+                    <input type="radio" name="overlayPosition" value="top-right">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><path d="M12 4 L10.59 5.41 L16.17 11 H4 V13 H16.17 L10.59 18.59 L12 20 L20 12 Z" transform="rotate(-45 12 12)"/></svg>
+                </label>
+                <label class="position-grid-cell">
+                    <input type="radio" name="overlayPosition" value="bottom-left" checked>
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><path d="M12 4 L10.59 5.41 L16.17 11 H4 V13 H16.17 L10.59 18.59 L12 20 L20 12 Z" transform="rotate(135 12 12)"/></svg>
+                </label>
+                <label class="position-grid-cell">
+                    <input type="radio" name="overlayPosition" value="bottom-right">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><path d="M12 4 L10.59 5.41 L16.17 11 H4 V13 H16.17 L10.59 18.59 L12 20 L20 12 Z" transform="rotate(45 12 12)"/></svg>
+                </label>
+            </div>
         </div>
 
         <button id="generate-btn" style="display: none;">4. Confirmar e Gerar Vídeo</button>
@@ -220,8 +169,9 @@
         </div>
     </div>
 
-
     <script>
+        // O SEU CÓDIGO JAVASCRIPT CONTINUA EXATAMENTE O MESMO.
+        // NENHUMA ALTERAÇÃO É NECESSÁRIA AQUI.
         const gpxInput = document.getElementById('gpx-file');
         const videoInput = document.getElementById('video-file');
         const generateBtn = document.getElementById('generate-btn');
@@ -238,264 +188,23 @@
         const mapElement = document.getElementById('map');
         const trackInfoDiv = document.getElementById('track-info');
         const positionSelector = document.getElementById('position-selector');
-
-        // Estado da aplicação
-        let gpxFile = null;
-        let videoFile = null;
-        let selectedSyncPoint = null;
-        let map = null;
-        let trackLayer = null;
-        let userMarker = null; // Marcador para seleção manual do utilizador
-        let suggestionMarker = null; // NOVO: Marcador para a sugestão automática
-        let gpxDataPoints = []; // Guarda os pontos do GPX
-
-        // Inicializa o mapa
+        let gpxFile = null, videoFile = null, selectedSyncPoint = null, map = null, trackLayer = null, userMarker = null, suggestionMarker = null, gpxDataPoints = [];
         map = L.map('map').setView([0, 0], 2);
-        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-            attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-        }).addTo(map);
-
-        // Event Listeners
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors' }).addTo(map);
         gpxInput.addEventListener('change', handleGpxUpload);
         videoInput.addEventListener('change', handleVideoUpload);
         generateBtn.addEventListener('click', handleGenerate);
-
-        // =====================================================================
-        // NOVO: Função para obter e aplicar a sugestão do servidor
-        // =====================================================================
-        async function fetchAndApplySuggestion() {
-            if (!gpxFile || !videoFile) {
-                return; // Só executa se ambos os ficheiros estiverem presentes
-            }
-            
-            statusDiv.textContent = 'Analisando ficheiros para sugerir ponto de sincronização...';
-
-            const formData = new FormData();
-            formData.append('gpxFile', gpxFile);
-            formData.append('videoFile', videoFile);
-
-            try {
-                const response = await fetch('/suggest', {
-                    method: 'POST',
-                    body: formData,
-                });
-
-                const data = await response.json();
-
-                if (response.ok && data.timestamp) {
-                    // Encontrou uma sugestão!
-                    statusDiv.textContent = 'Sugestão automática aplicada! Pode ajustar no mapa se necessário.';
-
-                    // Cria um ponto no mesmo formato que o gpx-parser usa
-                    const suggestedPoint = {
-                        lat: data.latitude,
-                        lon: data.longitude,
-                        time: new Date(data.timestamp),
-                    };
-                    
-                    // Simula uma seleção de ponto
-                    selectSyncPoint(suggestedPoint, true); // O 'true' indica que é uma sugestão
-
-                } else {
-                    // O servidor não encontrou uma sugestão, permite seleção manual
-                    statusDiv.textContent = `Não foi possível obter sugestão: ${data.message}. Por favor, selecione um ponto manualmente no mapa.`;
-                }
-            } catch (error) {
-                console.error("Erro ao contactar o endpoint /suggest:", error);
-                statusDiv.textContent = 'Erro de comunicação ao obter sugestão. Selecione um ponto manualmente.';
-            }
-        }
-        
-        // NOVO: Ícone para a sugestão automática
-        const suggestionIcon = L.icon({
-            iconUrl: 'data:image/svg+xml;base64,' + btoa(`
-                <svg xmlns="http://www.w3.org/2000/svg" width="25" height="41" viewBox="0 0 25 41">
-                    <path fill="#2E8B57" stroke="#FFFFFF" stroke-width="1.5" 
-                          d="M12.5 0C5.6 0 0 5.6 0 12.5c0 12.5 12.5 28.5 12.5 28.5s12.5-16 12.5-28.5C25 5.6 19.4 0 12.5 0z"/>
-                    <circle fill="#FFFFFF" cx="12.5" cy="12.5" r="4"/>
-                </svg>
-            `),
-            iconSize: [25, 41], iconAnchor: [12, 41], popupAnchor: [1, -34]
-        });
-
-        // NOVO: Ícone para a seleção manual do utilizador
-        const userIcon = L.icon({
-            iconUrl: 'data:image/svg+xml;base64,' + btoa(`
-                <svg xmlns="http://www.w3.org/2000/svg" width="25" height="41" viewBox="0 0 25 41">
-                    <path fill="#03dac6" stroke="#121212" stroke-width="1" 
-                          d="M12.5 0C5.6 0 0 5.6 0 12.5c0 12.5 12.5 28.5 12.5 28.5s12.5-16 12.5-28.5C25 5.6 19.4 0 12.5 0z"/>
-                    <circle fill="#121212" cx="12.5" cy="12.5" r="4"/>
-                </svg>
-            `),
-            iconSize: [25, 41], iconAnchor: [12, 41], popupAnchor: [1, -34]
-        });
-
-        function handleGpxUpload(event) {
-            gpxFile = event.target.files[0];
-            if (!gpxFile) return;
-
-            gpxInfo.textContent = gpxFile.name;
-            statusDiv.textContent = "Ficheiro GPX carregado. A processar o percurso...";
-            
-            const reader = new FileReader();
-            reader.onload = (e) => {
-                try {
-                    const gpxContent = e.target.result;
-                    const gpx = new gpxParser();
-                    gpx.parse(gpxContent);
-
-                    if (!gpx.tracks || gpx.tracks.length === 0) {
-                        throw new Error("O ficheiro GPX não contém nenhum percurso (track) válido.");
-                    }
-                    
-                    gpxDataPoints = gpx.tracks[0].points;
-                    mapElement.style.display = 'block';
-                    syncPointInfo.style.display = 'block';
-                    trackInfoDiv.style.display = 'block';
-                    setTimeout(() => map.invalidateSize(), 10); 
-                    displayTrack(gpxDataPoints);
-                    videoInput.disabled = false;
-                    statusDiv.textContent = "Percurso carregado. Selecione o ficheiro de vídeo.";
-
-                    // ALTERADO: Chama a função de sugestão se o vídeo já estiver carregado
-                    fetchAndApplySuggestion(); 
-
-                } catch (error) {
-                    statusDiv.textContent = `Erro ao processar o ficheiro GPX: ${error.message}`;
-                    mapElement.style.display = 'none';
-                    syncPointInfo.style.display = 'none';
-                    trackInfoDiv.style.display = 'none';
-                    videoInput.disabled = true;
-                }
-            };
-            reader.readAsText(gpxFile);
-        }
-
-        // ... (funções calculateTrackBounds, calculateOptimalZoom, calculateTrackDistance não precisam de alteração) ...
+        async function fetchAndApplySuggestion() { if (!gpxFile || !videoFile) return; statusDiv.textContent = 'Analisando ficheiros para sugerir ponto de sincronização...'; const formData = new FormData(); formData.append('gpxFile', gpxFile); formData.append('videoFile', videoFile); try { const response = await fetch('/suggest', { method: 'POST', body: formData, }); const data = await response.json(); if (response.ok && data.timestamp) { statusDiv.textContent = 'Sugestão automática aplicada! Pode ajustar no mapa se necessário.'; const suggestedPoint = { lat: data.latitude, lon: data.longitude, time: new Date(data.timestamp), }; selectSyncPoint(suggestedPoint, true); } else { statusDiv.textContent = `Não foi possível obter sugestão: ${data.message}. Por favor, selecione um ponto manualmente no mapa.`; } } catch (error) { console.error("Erro ao contactar o endpoint /suggest:", error); statusDiv.textContent = 'Erro de comunicação ao obter sugestão. Selecione um ponto manualmente.'; } }
+        const suggestionIcon = L.icon({ iconUrl: 'data:image/svg+xml;base64,' + btoa(`<svg xmlns="http://www.w3.org/2000/svg" width="25" height="41" viewBox="0 0 25 41"><path fill="#2E8B57" stroke="#FFFFFF" stroke-width="1.5" d="M12.5 0C5.6 0 0 5.6 0 12.5c0 12.5 12.5 28.5 12.5 28.5s12.5-16 12.5-28.5C25 5.6 19.4 0 12.5 0z"/><circle fill="#FFFFFF" cx="12.5" cy="12.5" r="4"/></svg>`), iconSize: [25, 41], iconAnchor: [12, 41], popupAnchor: [1, -34] });
+        const userIcon = L.icon({ iconUrl: 'data:image/svg+xml;base64,' + btoa(`<svg xmlns="http://www.w3.org/2000/svg" width="25" height="41" viewBox="0 0 25 41"><path fill="#03dac6" stroke="#121212" stroke-width="1" d="M12.5 0C5.6 0 0 5.6 0 12.5c0 12.5 12.5 28.5 12.5 28.5s12.5-16 12.5-28.5C25 5.6 19.4 0 12.5 0z"/><circle fill="#121212" cx="12.5" cy="12.5" r="4"/></svg>`), iconSize: [25, 41], iconAnchor: [12, 41], popupAnchor: [1, -34] });
+        function handleGpxUpload(event) { gpxFile = event.target.files[0]; if (!gpxFile) return; gpxInfo.textContent = gpxFile.name; statusDiv.textContent = "Ficheiro GPX carregado. A processar o percurso..."; const reader = new FileReader(); reader.onload = (e) => { try { const gpxContent = e.target.result; const gpx = new gpxParser(); gpx.parse(gpxContent); if (!gpx.tracks || gpx.tracks.length === 0) { throw new Error("O ficheiro GPX não contém nenhum percurso (track) válido."); } gpxDataPoints = gpx.tracks[0].points; mapElement.style.display = 'block'; syncPointInfo.style.display = 'block'; trackInfoDiv.style.display = 'block'; setTimeout(() => map.invalidateSize(), 10); displayTrack(gpxDataPoints); videoInput.disabled = false; statusDiv.textContent = "Percurso carregado. Selecione o ficheiro de vídeo."; fetchAndApplySuggestion(); } catch (error) { statusDiv.textContent = `Erro ao processar o ficheiro GPX: ${error.message}`; mapElement.style.display = 'none'; syncPointInfo.style.display = 'none'; trackInfoDiv.style.display = 'none'; videoInput.disabled = true; } }; reader.readAsText(gpxFile); }
         function calculateTrackBounds(points) { if (!points || points.length === 0) return null; let minLat = points[0].lat, maxLat = points[0].lat, minLon = points[0].lon, maxLon = points[0].lon; points.forEach(point => { minLat = Math.min(minLat, point.lat); maxLat = Math.max(maxLat, point.lat); minLon = Math.min(minLon, point.lon); maxLon = Math.max(maxLon, point.lon); }); return { southWest: [minLat, minLon], northEast: [maxLat, maxLon], center: [(minLat + maxLat) / 2, (minLon + maxLon) / 2], latSpan: maxLat - minLat, lonSpan: maxLon - minLon }; }
         function calculateOptimalZoom(bounds) { const maxSpan = Math.max(bounds.latSpan, bounds.lonSpan); let zoom; if (maxSpan > 10) zoom = 6; else if (maxSpan > 5) zoom = 8; else if (maxSpan > 1) zoom = 10; else if (maxSpan > 0.5) zoom = 12; else if (maxSpan > 0.1) zoom = 14; else if (maxSpan > 0.01) zoom = 16; else zoom = 18; return zoom; }
         function calculateTrackDistance(points) { if (!points || points.length < 2) return 0; let totalDistance = 0; for (let i = 1; i < points.length; i++) { const prev = points[i - 1], curr = points[i]; const R = 6371000, dLat = (curr.lat - prev.lat) * Math.PI / 180, dLon = (curr.lon - prev.lon) * Math.PI / 180, a = Math.sin(dLat/2) * Math.sin(dLat/2) + Math.cos(prev.lat * Math.PI / 180) * Math.cos(curr.lat * Math.PI / 180) * Math.sin(dLon/2) * Math.sin(dLon/2), c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a)); totalDistance += R * c; } return totalDistance; }
-        
-        function displayTrack(points) {
-            if (trackLayer) map.removeLayer(trackLayer);
-            
-            const bounds = calculateTrackBounds(points);
-            if (!bounds) return;
-            
-            const distance = calculateTrackDistance(points);
-            const duration = points.length > 1 ? new Date(points[points.length - 1].time) - new Date(points[0].time) : 0;
-            
-            trackInfoDiv.innerHTML = `<strong>Informações do Percurso:</strong><br>📍 Pontos: ${points.length} | 📏 Distância: ${(distance / 1000).toFixed(2)} km | ⏱️ Duração: ${Math.round(duration / 60000)} min`;
-            
-            const latLngs = points.map(p => [p.lat, p.lon]);
-            trackLayer = L.polyline(latLngs, { color: '#bb86fc', weight: 3, opacity: 0.8 }).addTo(map);
-            
-            const optimalZoom = calculateOptimalZoom(bounds);
-            const leafletBounds = L.latLngBounds(bounds.southWest, bounds.northEast);
-            map.fitBounds(leafletBounds.pad(0.1), { maxZoom: Math.min(optimalZoom, 18), padding: [20, 20] });
-
-            trackLayer.on('click', (e) => {
-                const clickedLat = e.latlng.lat, clickedLon = e.latlng.lng;
-                let closestPoint = null, minDistance = Infinity;
-                gpxDataPoints.forEach(p => {
-                    const distance = Math.sqrt(Math.pow(p.lat - clickedLat, 2) + Math.pow(p.lon - clickedLon, 2));
-                    if (distance < minDistance) { minDistance = distance; closestPoint = p; }
-                });
-
-                if (closestPoint) {
-                    selectSyncPoint(closestPoint, false); // 'false' indica seleção manual
-                }
-            });
-        }
-        
-        // =====================================================================
-        // ALTERADO: Função centralizada para selecionar um ponto
-        // =====================================================================
-        function selectSyncPoint(point, isSuggestion) {
-            selectedSyncPoint = point;
-
-            // Remove marcadores antigos
-            if (userMarker) map.removeLayer(userMarker);
-            if (suggestionMarker) map.removeLayer(suggestionMarker);
-            
-            const iconToUse = isSuggestion ? suggestionIcon : userIcon;
-            const markerType = isSuggestion ? 'suggestionMarker' : 'userMarker';
-
-            // Cria o novo marcador
-            const newMarker = L.marker([point.lat, point.lon], { icon: iconToUse }).addTo(map);
-
-            if(isSuggestion) {
-                suggestionMarker = newMarker;
-            } else {
-                userMarker = newMarker;
-            }
-            
-            const pointTime = new Date(point.time).toLocaleString('pt-BR', { timeZone: 'UTC' });
-            syncPointInfo.textContent = `Ponto selecionado (${isSuggestion ? 'sugestão' : 'manual'}): ${pointTime} (UTC)`;
-            
-            if (videoFile) {
-                generateBtn.style.display = 'block';
-                positionSelector.style.display = 'block';
-            }
-        }
-
-
-        function handleVideoUpload(event) {
-            videoFile = event.target.files[0];
-            if (!videoFile) return;
-            
-            videoInfo.textContent = videoFile.name;
-            if (selectedSyncPoint) {
-                generateBtn.style.display = 'block';
-                positionSelector.style.display = 'block';
-            }
-            
-            // ALTERADO: Chama a função de sugestão assim que o vídeo é carregado
-            fetchAndApplySuggestion();
-        }
-
-        function handleGenerate() {
-            if (!gpxFile || !videoFile || !selectedSyncPoint) {
-                statusDiv.textContent = "Erro: Por favor, selecione os dois ficheiros e um ponto de sincronização.";
-                return;
-            }
-
-            const selectedPosition = document.querySelector('input[name="overlayPosition"]:checked').value;
-            generateBtn.disabled = true;
-            statusDiv.textContent = 'A enviar ficheiros...';
-            progressContainer.style.display = 'block';
-            progressBar.style.width = '0%';
-            progressBar.textContent = '0%';
-            logsContainer.style.display = 'none';
-            downloadDiv.style.display = 'none';
-
-            const formData = new FormData();
-            formData.append('gpxFile', gpxFile);
-            formData.append('videoFile', videoFile);
-            formData.append('syncTimestamp', selectedSyncPoint.time.toISOString());
-            formData.append('overlayPosition', selectedPosition);
-
-            const xhr = new XMLHttpRequest();
-            xhr.open('POST', '/process', true);
-            xhr.upload.onprogress = (event) => {
-                if (event.lengthComputable) { const percentComplete = Math.round((event.loaded / event.total) * 100); progressBar.style.width = percentComplete + '%'; progressBar.textContent = percentComplete + '%'; }
-            };
-            xhr.onload = () => {
-                progressContainer.style.display = 'none';
-                const result = JSON.parse(xhr.responseText);
-                logsPre.textContent = result.logs.join('\n');
-                logsContainer.style.display = 'block';
-                if (xhr.status >= 200 && xhr.status < 300) {
-                    statusDiv.textContent = 'Sucesso! O seu vídeo está pronto.';
-                    if (result.download_url) { downloadLink.href = result.download_url; downloadLink.textContent = 'Descarregar Vídeo Final'; downloadDiv.style.display = 'block'; }
-                } else {
-                    statusDiv.textContent = `Erro: ${result.message || 'Ocorreu um erro no servidor.'}`;
-                }
-                generateBtn.disabled = false;
-            };
-            xhr.onerror = () => { statusDiv.textContent = 'Erro de rede ao enviar os ficheiros.'; generateBtn.disabled = false; progressContainer.style.display = 'none'; };
-            xhr.send(formData);
-        }
+        function displayTrack(points) { if (trackLayer) map.removeLayer(trackLayer); const bounds = calculateTrackBounds(points); if (!bounds) return; const distance = calculateTrackDistance(points); const duration = points.length > 1 ? new Date(points[points.length - 1].time) - new Date(points[0].time) : 0; trackInfoDiv.innerHTML = `<strong>Informações do Percurso:</strong><br>📍 Pontos: ${points.length} | 📏 Distância: ${(distance / 1000).toFixed(2)} km | ⏱️ Duração: ${Math.round(duration / 60000)} min`; const latLngs = points.map(p => [p.lat, p.lon]); trackLayer = L.polyline(latLngs, { color: '#bb86fc', weight: 3, opacity: 0.8 }).addTo(map); const optimalZoom = calculateOptimalZoom(bounds); const leafletBounds = L.latLngBounds(bounds.southWest, bounds.northEast); map.fitBounds(leafletBounds.pad(0.1), { maxZoom: Math.min(optimalZoom, 18), padding: [20, 20] }); trackLayer.on('click', (e) => { const clickedLat = e.latlng.lat, clickedLon = e.latlng.lng; let closestPoint = null, minDistance = Infinity; gpxDataPoints.forEach(p => { const distance = Math.sqrt(Math.pow(p.lat - clickedLat, 2) + Math.pow(p.lon - clickedLon, 2)); if (distance < minDistance) { minDistance = distance; closestPoint = p; } }); if (closestPoint) { selectSyncPoint(closestPoint, false); } }); }
+        function selectSyncPoint(point, isSuggestion) { selectedSyncPoint = point; if (userMarker) map.removeLayer(userMarker); if (suggestionMarker) map.removeLayer(suggestionMarker); const iconToUse = isSuggestion ? suggestionIcon : userIcon; const newMarker = L.marker([point.lat, point.lon], { icon: iconToUse }).addTo(map); if(isSuggestion) { suggestionMarker = newMarker; } else { userMarker = newMarker; } const pointTime = new Date(point.time).toLocaleString('pt-BR', { timeZone: 'UTC' }); syncPointInfo.textContent = `Ponto selecionado (${isSuggestion ? 'sugestão' : 'manual'}): ${pointTime} (UTC)`; if (videoFile) { generateBtn.style.display = 'block'; positionSelector.style.display = 'flex'; } }
+        function handleVideoUpload(event) { videoFile = event.target.files[0]; if (!videoFile) return; videoInfo.textContent = videoFile.name; if (selectedSyncPoint) { generateBtn.style.display = 'block'; positionSelector.style.display = 'flex'; } fetchAndApplySuggestion(); }
+        function handleGenerate() { if (!gpxFile || !videoFile || !selectedSyncPoint) { statusDiv.textContent = "Erro: Por favor, selecione os dois ficheiros e um ponto de sincronização."; return; } const selectedPosition = document.querySelector('input[name="overlayPosition"]:checked').value; generateBtn.disabled = true; statusDiv.textContent = 'A enviar ficheiros...'; progressContainer.style.display = 'block'; progressBar.style.width = '0%'; progressBar.textContent = '0%'; logsContainer.style.display = 'none'; downloadDiv.style.display = 'none'; const formData = new FormData(); formData.append('gpxFile', gpxFile); formData.append('videoFile', videoFile); formData.append('syncTimestamp', selectedSyncPoint.time.toISOString()); formData.append('overlayPosition', selectedPosition); const xhr = new XMLHttpRequest(); xhr.open('POST', '/process', true); xhr.upload.onprogress = (event) => { if (event.lengthComputable) { const percentComplete = Math.round((event.loaded / event.total) * 100); progressBar.style.width = percentComplete + '%'; progressBar.textContent = percentComplete + '%'; } }; xhr.onload = () => { progressContainer.style.display = 'none'; const result = JSON.parse(xhr.responseText); logsPre.textContent = result.logs.join('\n'); logsContainer.style.display = 'block'; if (xhr.status >= 200 && xhr.status < 300) { statusDiv.textContent = 'Sucesso! O seu vídeo está pronto.'; if (result.download_url) { downloadLink.href = result.download_url; downloadLink.textContent = 'Descarregar Vídeo Final'; downloadDiv.style.display = 'block'; } } else { statusDiv.textContent = `Erro: ${result.message || 'Ocorreu um erro no servidor.'}`; } generateBtn.disabled = false; }; xhr.onerror = () => { statusDiv.textContent = 'Erro de rede ao enviar os ficheiros.'; generateBtn.disabled = false; progressContainer.style.display = 'none'; }; xhr.send(formData); }
     </script>
 </body>
 </html>
