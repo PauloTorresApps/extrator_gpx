@@ -62,7 +62,6 @@ async fn process_files(mut multipart: Multipart) -> impl IntoResponse {
     tokio::fs::create_dir_all(&upload_dir).await.unwrap();
 
     // Processa os ficheiros enviados
-    // CORREÇÃO: Remove o 'mut' desnecessário
     while let Some(field) = multipart.next_field().await.unwrap() {
         let name = field.name().unwrap().to_string();
         
@@ -73,10 +72,13 @@ async fn process_files(mut multipart: Multipart) -> impl IntoResponse {
             let path = upload_dir.join(format!("{}-{}", unique_id, file_name));
             tokio::fs::write(&path, &data).await.unwrap();
 
+            // Converte o caminho relativo para um caminho absoluto.
+            let absolute_path = std::fs::canonicalize(&path).unwrap();
+
             if name == "gpxFile" {
-                gpx_path = Some(path);
+                gpx_path = Some(absolute_path);
             } else if name == "videoFile" {
-                video_path = Some(path);
+                video_path = Some(absolute_path);
             }
         } else if name == "syncTimestamp" {
             let data = field.bytes().await.unwrap();
@@ -85,7 +87,13 @@ async fn process_files(mut multipart: Multipart) -> impl IntoResponse {
     }
 
     if let (Some(gpx), Some(video), Some(timestamp)) = (gpx_path, video_path, sync_timestamp) {
-        match processing::run_processing(gpx.clone(), video.clone(), timestamp) {
+        // CORREÇÃO: Executa a função de processamento síncrona num thread de bloqueio
+        // para não bloquear o runtime assíncrono do servidor.
+        let result = tokio::task::spawn_blocking(move || {
+            processing::run_processing(gpx, video, timestamp)
+        }).await.unwrap(); // .unwrap() lida com o JoinError do spawn_blocking
+
+        match result {
             Ok(logs) => {
                 let output_filename = "output_video.mp4";
                 let response = ProcessResponse {
