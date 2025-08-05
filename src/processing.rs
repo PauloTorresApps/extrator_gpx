@@ -4,7 +4,7 @@ use std::path::{Path, PathBuf};
 use std::process::Command as StdCommand;
 use std::error::Error;
 
-use chrono::{DateTime, Duration, Utc};
+use chrono::{DateTime, Utc};
 use gpx::{Gpx, Waypoint, read};
 
 use crate::drawing::generate_speedometer_image;
@@ -15,10 +15,10 @@ pub struct FrameInfo {
     timestamp_sec: f64,
 }
 
-pub fn run_processing(gpx_path: PathBuf, video_path: PathBuf) -> Result<Vec<String>, (String, Vec<String>)> {
+pub fn run_processing(gpx_path: PathBuf, video_path: PathBuf, sync_timestamp_str: String) -> Result<Vec<String>, (String, Vec<String>)> {
     let mut logs = Vec::new();
     
-    match process_internal(gpx_path, video_path, &mut logs) {
+    match process_internal(gpx_path, video_path, &mut logs, sync_timestamp_str) {
         Ok(_) => {
             logs.push("Processo concluído com sucesso!".to_string());
             Ok(logs)
@@ -31,7 +31,7 @@ pub fn run_processing(gpx_path: PathBuf, video_path: PathBuf) -> Result<Vec<Stri
     }
 }
 
-fn process_internal(gpx_path: PathBuf, video_path: PathBuf, logs: &mut Vec<String>) -> Result<(), Box<dyn Error>> {
+fn process_internal(gpx_path: PathBuf, video_path: PathBuf, logs: &mut Vec<String>, sync_timestamp_str: String) -> Result<(), Box<dyn Error>> {
     let output_dir = "output_frames";
     let final_video_dir = "output";
     fs::create_dir_all(output_dir)?;
@@ -40,8 +40,14 @@ fn process_internal(gpx_path: PathBuf, video_path: PathBuf, logs: &mut Vec<Strin
     logs.push(format!("A ler metadados do vídeo: {:?}", video_path));
     let (video_start_time, video_end_time) = get_video_time_range(&video_path)?;
     logs.push(format!("Início do vídeo (UTC): {}", video_start_time));
-    logs.push(format!("Fim do vídeo (UTC):   {}", video_end_time));
     
+    let selected_gpx_time = sync_timestamp_str.parse::<DateTime<Utc>>()?;
+    logs.push(format!("Ponto de sincronização GPX selecionado (UTC): {}", selected_gpx_time));
+    
+    // Calcula o desvio de tempo
+    let time_offset = selected_gpx_time - video_start_time;
+    logs.push(format!("Desvio de tempo calculado: {} segundos.", time_offset.num_seconds()));
+
     logs.push(format!("A ler ficheiro GPX: {:?}", gpx_path));
     let gpx: Gpx = read(BufReader::new(File::open(&gpx_path)?))?;
     logs.push("Ficheiro GPX lido com sucesso!".to_string());
@@ -57,8 +63,7 @@ fn process_internal(gpx_path: PathBuf, video_path: PathBuf, logs: &mut Vec<Strin
             let synced_points: Vec<&Waypoint> = segment.points.iter().filter(|point| {
                 if let Some(time_str) = point.time.as_ref().and_then(|t| t.format().ok()) {
                     if let Ok(point_time) = time_str.parse::<DateTime<Utc>>() {
-                        // Volta a usar o ajuste de tempo fixo.
-                        let adjusted_point_time = point_time - Duration::hours(3);
+                        let adjusted_point_time = point_time - time_offset;
                         adjusted_point_time >= video_start_time && adjusted_point_time <= video_end_time
                     } else { false }
                 } else { false }
@@ -85,7 +90,7 @@ fn process_internal(gpx_path: PathBuf, video_path: PathBuf, logs: &mut Vec<Strin
 
                 if let Some(time_str) = p2.time.as_ref().and_then(|t| t.format().ok()) {
                      if let Ok(point_time) = time_str.parse::<DateTime<Utc>>() {
-                        let adjusted_point_time = point_time - Duration::hours(3);
+                        let adjusted_point_time = point_time - time_offset;
                         let timestamp_sec = (adjusted_point_time - video_start_time).num_milliseconds() as f64 / 1000.0;
                         frame_infos.push(FrameInfo { path: output_path, timestamp_sec });
                     }

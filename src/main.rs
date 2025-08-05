@@ -55,31 +55,37 @@ struct ProcessResponse {
 async fn process_files(mut multipart: Multipart) -> impl IntoResponse {
     let mut gpx_path: Option<PathBuf> = None;
     let mut video_path: Option<PathBuf> = None;
+    let mut sync_timestamp: Option<String> = None;
 
     // Cria uma pasta para os uploads temporários
     let upload_dir = PathBuf::from("uploads");
     tokio::fs::create_dir_all(&upload_dir).await.unwrap();
 
     // Processa os ficheiros enviados
+    // CORREÇÃO: Remove o 'mut' desnecessário
     while let Some(field) = multipart.next_field().await.unwrap() {
         let name = field.name().unwrap().to_string();
-        let file_name = field.file_name().unwrap().to_string();
-        let data = field.bytes().await.unwrap();
+        
+        if let Some(file_name) = field.file_name() {
+            let file_name = file_name.to_string();
+            let data = field.bytes().await.unwrap();
+            let unique_id = Uuid::new_v4();
+            let path = upload_dir.join(format!("{}-{}", unique_id, file_name));
+            tokio::fs::write(&path, &data).await.unwrap();
 
-        let unique_id = Uuid::new_v4();
-        let path = upload_dir.join(format!("{}-{}", unique_id, file_name));
-
-        tokio::fs::write(&path, &data).await.unwrap();
-
-        if name == "gpxFile" {
-            gpx_path = Some(path);
-        } else if name == "videoFile" {
-            video_path = Some(path);
+            if name == "gpxFile" {
+                gpx_path = Some(path);
+            } else if name == "videoFile" {
+                video_path = Some(path);
+            }
+        } else if name == "syncTimestamp" {
+            let data = field.bytes().await.unwrap();
+            sync_timestamp = Some(String::from_utf8(data.to_vec()).unwrap());
         }
     }
 
-    if let (Some(gpx), Some(video)) = (gpx_path, video_path) {
-        match processing::run_processing(gpx.clone(), video.clone()) {
+    if let (Some(gpx), Some(video), Some(timestamp)) = (gpx_path, video_path, sync_timestamp) {
+        match processing::run_processing(gpx.clone(), video.clone(), timestamp) {
             Ok(logs) => {
                 let output_filename = "output_video.mp4";
                 let response = ProcessResponse {
@@ -100,7 +106,7 @@ async fn process_files(mut multipart: Multipart) -> impl IntoResponse {
         }
     } else {
         let response = ProcessResponse {
-            message: "Erro: Ficheiro GPX ou de vídeo em falta.".to_string(),
+            message: "Erro: Ficheiros ou ponto de sincronização em falta.".to_string(),
             download_url: None,
             logs: vec![],
         };
