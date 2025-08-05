@@ -6,7 +6,7 @@ use imageproc::drawing::{draw_polygon_mut, draw_filled_circle_mut, draw_line_seg
 use rusttype::{Font, Scale};
 
 // A função agora aceita a direção (bearing) e a força G
-pub fn generate_speedometer_image(speed_kmh: f64, bearing: f64, g_force: f64, output_path: &str) -> Result<(), Box<dyn Error>> {
+pub fn generate_speedometer_image(speed_kmh: f64, bearing: f64, g_force: f64, elevation: f64, output_path: &str) -> Result<(), Box<dyn Error>> {
     const SCALE_FACTOR: u32 = 4;
     const FINAL_IMG_SIZE: u32 = 300;
     const IMG_SIZE: u32 = FINAL_IMG_SIZE * SCALE_FACTOR;
@@ -87,6 +87,17 @@ pub fn generate_speedometer_image(speed_kmh: f64, bearing: f64, g_force: f64, ou
     draw_filled_circle_mut(&mut img, g_force_center, 30 * SCALE_FACTOR as i32, transparent_black);
     draw_centered_text_mut(&mut img, white, g_force_center.0, g_force_center.1, Scale::uniform(20.0 * SCALE_FACTOR as f32), &font_regular, &g_force_text);
     
+    // --- NOVO: Bloco de Desenho da Elevação ---
+    let elevation_text = format!("{:.0} m", elevation);
+    let elevation_center = (
+        (45 * SCALE_FACTOR as i32), // Mesma posição X da Força G
+        (IMG_SIZE as i32 - (45 * SCALE_FACTOR as i32)) // Posição Y no canto inferior
+    );
+    draw_filled_circle_mut(&mut img, elevation_center, 30 * SCALE_FACTOR as i32, transparent_black);
+    draw_centered_text_mut(&mut img, white, elevation_center.0, elevation_center.1 - (5 * SCALE_FACTOR as i32), Scale::uniform(16.0 * SCALE_FACTOR as f32), &font_regular, "ALT");
+    draw_centered_text_mut(&mut img, white, elevation_center.0, elevation_center.1 + (10 * SCALE_FACTOR as i32), Scale::uniform(20.0 * SCALE_FACTOR as f32), &font_bold, &elevation_text);
+    // --- Fim do Bloco ---
+
     let final_img = image::imageops::resize(
         &img,
         FINAL_IMG_SIZE,

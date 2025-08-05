@@ -81,10 +81,11 @@ fn process_internal(gpx_path: PathBuf, video_path: PathBuf, logs: &mut Vec<Strin
                 let speed_kmh = calculate_speed_kmh(p1, p2).unwrap_or(0.0);
                 let g_force = calculate_g_force(p1, p2, p3).unwrap_or(0.0);
                 let bearing = calculate_bearing(p1, p2);
+                let elevation = p2.elevation.unwrap_or(0.0);
 
                 let output_path = format!("{}/frame_{:05}.png", output_dir, frame_counter);
                 frame_counter += 1;
-                generate_speedometer_image(speed_kmh, bearing, g_force, &output_path)?;
+                generate_speedometer_image(speed_kmh, bearing, g_force, elevation, &output_path)?;
 
                 if let Some(time_str) = p2.time.as_ref().and_then(|t| t.format().ok()) {
                      if let Ok(point_time) = time_str.parse::<DateTime<Utc>>() {
