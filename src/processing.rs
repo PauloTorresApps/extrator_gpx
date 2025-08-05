@@ -18,7 +18,9 @@ pub struct FrameInfo {
 pub fn run_processing(gpx_path: PathBuf, video_path: PathBuf, sync_timestamp_str: String) -> Result<Vec<String>, (String, Vec<String>)> {
     let mut logs = Vec::new();
     
-    match process_internal(gpx_path, video_path, &mut logs, sync_timestamp_str) {
+    // Usamos uma função interna para facilitar o tratamento de erros com `?`
+    // e ainda assim capturar os logs.
+    match process_internal(gpx_path.clone(), video_path.clone(), &mut logs, sync_timestamp_str) {
         Ok(_) => {
             logs.push("Processo concluído com sucesso!".to_string());
             Ok(logs)
@@ -26,6 +28,8 @@ pub fn run_processing(gpx_path: PathBuf, video_path: PathBuf, sync_timestamp_str
         Err(e) => {
             let error_message = e.to_string();
             logs.push(format!("Ocorreu um erro: {}", error_message));
+            // Mesmo em caso de erro, tenta limpar os ficheiros.
+            cleanup_files(&gpx_path, &video_path, &mut logs);
             Err((error_message, logs))
         }
     }
@@ -44,7 +48,6 @@ fn process_internal(gpx_path: PathBuf, video_path: PathBuf, logs: &mut Vec<Strin
     let selected_gpx_time = sync_timestamp_str.parse::<DateTime<Utc>>()?;
     logs.push(format!("Ponto de sincronização GPX selecionado (UTC): {}", selected_gpx_time));
     
-    // Calcula o desvio de tempo
     let time_offset = selected_gpx_time - video_start_time;
     logs.push(format!("Desvio de tempo calculado: {} segundos.", time_offset.num_seconds()));
 
@@ -108,6 +111,8 @@ fn process_internal(gpx_path: PathBuf, video_path: PathBuf, logs: &mut Vec<Strin
         logs.push("Nenhum frame foi gerado.".to_string());
     }
 
+    cleanup_files(&gpx_path, &video_path, logs);
+
     Ok(())
 }
 
@@ -140,4 +145,20 @@ fn generate_final_video(video_path: &Path, frame_infos: &[FrameInfo]) -> Result<
     let status = StdCommand::new("ffmpeg").args(&inputs).arg("-filter_complex").arg(&complex_filter).arg("-c:a").arg("copy").arg(output_file).status()?;
     if !status.success() { return Err("O comando FFmpeg falhou.".into()); }
     Ok(())
+}
+
+fn cleanup_files(gpx_path: &Path, video_path: &Path, logs: &mut Vec<String>) {
+    logs.push("A limpar ficheiros temporários...".to_string());
+
+    if let Err(e) = fs::remove_file(gpx_path) {
+        logs.push(format!("Aviso: Não foi possível apagar o ficheiro GPX temporário: {}", e));
+    }
+    if let Err(e) = fs::remove_file(video_path) {
+        logs.push(format!("Aviso: Não foi possível apagar o ficheiro de vídeo temporário: {}", e));
+    }
+    if let Err(e) = fs::remove_dir_all("output_frames") {
+        logs.push(format!("Aviso: Não foi possível apagar a pasta de frames temporária: {}", e));
+    }
+
+    logs.push("Limpeza concluída.".to_string());
 }

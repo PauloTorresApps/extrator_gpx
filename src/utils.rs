@@ -2,20 +2,21 @@ use std::path::Path;
 use std::error::Error;
 use chrono::{DateTime, Duration, Utc};
 use gpx::Waypoint;
-// NOVO: Importa o tipo de erro do ffprobe para o podermos inspecionar.
-use ffprobe::error::Error as FfprobeError;
 
 pub fn get_video_time_range(video_path: &Path) -> Result<(DateTime<Utc>, DateTime<Utc>), Box<dyn Error>> {
-    // CORREÇÃO: Adiciona um tratamento de erros detalhado para a chamada do ffprobe.
+    // Simplifica o tratamento de erros para ser mais genérico
     let metadata = match ffprobe::ffprobe(video_path) {
         Ok(data) => data,
-        Err(FfprobeError::Io(io_err)) if io_err.kind() == std::io::ErrorKind::NotFound => {
-            // Este é o erro específico para "comando não encontrado".
-            return Err("Comando 'ffprobe' não encontrado. Verifique se o FFmpeg está instalado e se o seu diretório está no PATH do sistema.".into());
-        }
         Err(e) => {
-            // Para outros erros, propaga-os com mais contexto.
-            return Err(format!("Erro ao executar o ffprobe: {}", e).into());
+            let error_message = e.to_string();
+            // Verifica se o erro parece ser sobre comando não encontrado
+            if error_message.contains("No such file or directory") || 
+               error_message.contains("not found") ||
+               error_message.contains("cannot find") {
+                return Err("Comando 'ffprobe' não encontrado. Verifique se o FFmpeg está instalado e se o seu diretório está no PATH do sistema.".into());
+            }
+            // Para outros erros, propaga-os com mais contexto
+            return Err(format!("Erro ao executar o ffprobe: {}", error_message).into());
         }
     };
     
@@ -62,7 +63,6 @@ fn distance_3d(p1: &Waypoint, p2: &Waypoint) -> f64 {
 
     (horizontal_distance.powi(2) + vertical_distance.powi(2)).sqrt()
 }
-
 
 pub fn calculate_speed_kmh(p1: &Waypoint, p2: &Waypoint) -> Option<f64> {
     let distance_m = distance_3d(p1, p2);
