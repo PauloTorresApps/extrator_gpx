@@ -23,13 +23,15 @@ pub fn run_processing(gpx_path: PathBuf, video_path: PathBuf, sync_timestamp_str
     match process_internal(gpx_path.clone(), video_path.clone(), &mut logs, sync_timestamp_str) {
         Ok(_) => {
             logs.push("Processo concluído com sucesso!".to_string());
+            // Limpa os ficheiros após o sucesso.
+            cleanup_files(&gpx_path, &mut logs);
             Ok(logs)
         },
         Err(e) => {
             let error_message = e.to_string();
             logs.push(format!("Ocorreu um erro: {}", error_message));
             // Mesmo em caso de erro, tenta limpar os ficheiros.
-            cleanup_files(&gpx_path, &video_path, &mut logs);
+            cleanup_files(&gpx_path, &mut logs);
             Err((error_message, logs))
         }
     }
@@ -111,8 +113,6 @@ fn process_internal(gpx_path: PathBuf, video_path: PathBuf, logs: &mut Vec<Strin
         logs.push("Nenhum frame foi gerado.".to_string());
     }
 
-    cleanup_files(&gpx_path, &video_path, logs);
-
     Ok(())
 }
 
@@ -147,15 +147,18 @@ fn generate_final_video(video_path: &Path, frame_infos: &[FrameInfo]) -> Result<
     Ok(())
 }
 
-fn cleanup_files(gpx_path: &Path, video_path: &Path, logs: &mut Vec<String>) {
+// CORREÇÃO: A função agora limpa a pasta de uploads e a pasta de frames.
+fn cleanup_files(gpx_path: &Path, logs: &mut Vec<String>) {
     logs.push("A limpar ficheiros temporários...".to_string());
 
-    if let Err(e) = fs::remove_file(gpx_path) {
-        logs.push(format!("Aviso: Não foi possível apagar o ficheiro GPX temporário: {}", e));
+    // Apaga a pasta 'uploads' que contém os ficheiros originais
+    if let Some(upload_dir) = gpx_path.parent() {
+        if let Err(e) = fs::remove_dir_all(upload_dir) {
+            logs.push(format!("Aviso: Não foi possível apagar a pasta de uploads: {}", e));
+        }
     }
-    if let Err(e) = fs::remove_file(video_path) {
-        logs.push(format!("Aviso: Não foi possível apagar o ficheiro de vídeo temporário: {}", e));
-    }
+
+    // Apaga a pasta 'output_frames' que contém as imagens do velocímetro
     if let Err(e) = fs::remove_dir_all("output_frames") {
         logs.push(format!("Aviso: Não foi possível apagar a pasta de frames temporária: {}", e));
     }
