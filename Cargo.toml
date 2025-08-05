@@ -1,0 +1,22 @@
+# Arquivo de Manifesto do Cargo
+# Define as configurações e dependências do projeto Rust.
+
+[package]
+name = "extrator_gpx"
+version = "0.1.0"
+edition = "2021"
+
+# Seção de dependências.
+[dependencies]
+gpx = "0.10.0"
+ffprobe = "0.4.0"
+chrono = "0.4"
+
+# Dependências para desenho e manipulação de imagens
+image = "0.24"
+imageproc = "0.23"
+rusttype = "0.9"
+
+# Novas dependências para a Interface Gráfica (GUI)
+iced = { version = "0.12", features = ["tokio"] }
+rfd = "0.14" # Para abrir diálogos de seleção de ficheiro
