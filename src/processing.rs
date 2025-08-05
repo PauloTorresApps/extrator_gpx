@@ -57,6 +57,7 @@ fn process_internal(gpx_path: PathBuf, video_path: PathBuf, logs: &mut Vec<Strin
             let synced_points: Vec<&Waypoint> = segment.points.iter().filter(|point| {
                 if let Some(time_str) = point.time.as_ref().and_then(|t| t.format().ok()) {
                     if let Ok(point_time) = time_str.parse::<DateTime<Utc>>() {
+                        // Volta a usar o ajuste de tempo fixo.
                         let adjusted_point_time = point_time - Duration::hours(3);
                         adjusted_point_time >= video_start_time && adjusted_point_time <= video_end_time
                     } else { false }
