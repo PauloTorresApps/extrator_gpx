@@ -147,7 +147,8 @@
         let selectedSyncPoint = null;
         let map = null;
         let trackLayer = null;
-        let marker = null;
+        let userMarker = null; // Marcador para seleção manual do utilizador
+        let suggestionMarker = null; // NOVO: Marcador para a sugestão automática
         let gpxDataPoints = []; // Guarda os pontos do GPX
 
         // Inicializa o mapa
@@ -160,6 +161,76 @@
         gpxInput.addEventListener('change', handleGpxUpload);
         videoInput.addEventListener('change', handleVideoUpload);
         generateBtn.addEventListener('click', handleGenerate);
+
+        // =====================================================================
+        // NOVO: Função para obter e aplicar a sugestão do servidor
+        // =====================================================================
+        async function fetchAndApplySuggestion() {
+            if (!gpxFile || !videoFile) {
+                return; // Só executa se ambos os ficheiros estiverem presentes
+            }
+            
+            statusDiv.textContent = 'Analisando ficheiros para sugerir ponto de sincronização...';
+
+            const formData = new FormData();
+            formData.append('gpxFile', gpxFile);
+            formData.append('videoFile', videoFile);
+
+            try {
+                const response = await fetch('/suggest', {
+                    method: 'POST',
+                    body: formData,
+                });
+
+                const data = await response.json();
+
+                if (response.ok && data.timestamp) {
+                    // Encontrou uma sugestão!
+                    statusDiv.textContent = 'Sugestão automática aplicada! Pode ajustar no mapa se necessário.';
+
+                    // Cria um ponto no mesmo formato que o gpx-parser usa
+                    const suggestedPoint = {
+                        lat: data.latitude,
+                        lon: data.longitude,
+                        time: new Date(data.timestamp),
+                    };
+                    
+                    // Simula uma seleção de ponto
+                    selectSyncPoint(suggestedPoint, true); // O 'true' indica que é uma sugestão
+
+                } else {
+                    // O servidor não encontrou uma sugestão, permite seleção manual
+                    statusDiv.textContent = `Não foi possível obter sugestão: ${data.message}. Por favor, selecione um ponto manualmente no mapa.`;
+                }
+            } catch (error) {
+                console.error("Erro ao contactar o endpoint /suggest:", error);
+                statusDiv.textContent = 'Erro de comunicação ao obter sugestão. Selecione um ponto manualmente.';
+            }
+        }
+        
+        // NOVO: Ícone para a sugestão automática
+        const suggestionIcon = L.icon({
+            iconUrl: 'data:image/svg+xml;base64,' + btoa(`
+                <svg xmlns="http://www.w3.org/2000/svg" width="25" height="41" viewBox="0 0 25 41">
+                    <path fill="#2E8B57" stroke="#FFFFFF" stroke-width="1.5" 
+                          d="M12.5 0C5.6 0 0 5.6 0 12.5c0 12.5 12.5 28.5 12.5 28.5s12.5-16 12.5-28.5C25 5.6 19.4 0 12.5 0z"/>
+                    <circle fill="#FFFFFF" cx="12.5" cy="12.5" r="4"/>
+                </svg>
+            `),
+            iconSize: [25, 41], iconAnchor: [12, 41], popupAnchor: [1, -34]
+        });
+
+        // NOVO: Ícone para a seleção manual do utilizador
+        const userIcon = L.icon({
+            iconUrl: 'data:image/svg+xml;base64,' + btoa(`
+                <svg xmlns="http://www.w3.org/2000/svg" width="25" height="41" viewBox="0 0 25 41">
+                    <path fill="#03dac6" stroke="#121212" stroke-width="1" 
+                          d="M12.5 0C5.6 0 0 5.6 0 12.5c0 12.5 12.5 28.5 12.5 28.5s12.5-16 12.5-28.5C25 5.6 19.4 0 12.5 0z"/>
+                    <circle fill="#121212" cx="12.5" cy="12.5" r="4"/>
+                </svg>
+            `),
+            iconSize: [25, 41], iconAnchor: [12, 41], popupAnchor: [1, -34]
+        });
 
         function handleGpxUpload(event) {
             gpxFile = event.target.files[0];
@@ -180,16 +251,17 @@
                     }
                     
                     gpxDataPoints = gpx.tracks[0].points;
-
                     mapElement.style.display = 'block';
                     syncPointInfo.style.display = 'block';
                     trackInfoDiv.style.display = 'block';
-                    
                     setTimeout(() => map.invalidateSize(), 10); 
-
                     displayTrack(gpxDataPoints);
                     videoInput.disabled = false;
-                    statusDiv.textContent = "Percurso carregado. Selecione um ponto no mapa.";
+                    statusDiv.textContent = "Percurso carregado. Selecione o ficheiro de vídeo.";
+
+                    // ALTERADO: Chama a função de sugestão se o vídeo já estiver carregado
+                    fetchAndApplySuggestion(); 
+
                 } catch (error) {
                     statusDiv.textContent = `Erro ao processar o ficheiro GPX: ${error.message}`;
                     mapElement.style.display = 'none';
@@ -201,68 +273,11 @@
             reader.readAsText(gpxFile);
         }
 
-        function calculateTrackBounds(points) {
-            if (!points || points.length === 0) return null;
-            
-            let minLat = points[0].lat;
-            let maxLat = points[0].lat;
-            let minLon = points[0].lon;
-            let maxLon = points[0].lon;
-            
-            points.forEach(point => {
-                minLat = Math.min(minLat, point.lat);
-                maxLat = Math.max(maxLat, point.lat);
-                minLon = Math.min(minLon, point.lon);
-                maxLon = Math.max(maxLon, point.lon);
-            });
-            
-            return {
-                southWest: [minLat, minLon],
-                northEast: [maxLat, maxLon],
-                center: [(minLat + maxLat) / 2, (minLon + maxLon) / 2],
-                latSpan: maxLat - minLat,
-                lonSpan: maxLon - minLon
-            };
-        }
-
-        function calculateOptimalZoom(bounds) {
-            const latSpan = bounds.latSpan;
-            const lonSpan = bounds.lonSpan;
-            const maxSpan = Math.max(latSpan, lonSpan);
-            
-            let zoom;
-            if (maxSpan > 10) zoom = 6;
-            else if (maxSpan > 5) zoom = 8;
-            else if (maxSpan > 1) zoom = 10;
-            else if (maxSpan > 0.5) zoom = 12;
-            else if (maxSpan > 0.1) zoom = 14;
-            else if (maxSpan > 0.01) zoom = 16;
-            else zoom = 18;
-            
-            return zoom;
-        }
-
-        function calculateTrackDistance(points) {
-            if (!points || points.length < 2) return 0;
-            
-            let totalDistance = 0;
-            for (let i = 1; i < points.length; i++) {
-                const prev = points[i - 1];
-                const curr = points[i];
-                
-                const R = 6371000;
-                const dLat = (curr.lat - prev.lat) * Math.PI / 180;
-                const dLon = (curr.lon - prev.lon) * Math.PI / 180;
-                const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
-                         Math.cos(prev.lat * Math.PI / 180) * Math.cos(curr.lat * Math.PI / 180) *
-                         Math.sin(dLon/2) * Math.sin(dLon/2);
-                const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
-                totalDistance += R * c;
-            }
-            
-            return totalDistance;
-        }
-
+        // ... (funções calculateTrackBounds, calculateOptimalZoom, calculateTrackDistance não precisam de alteração) ...
+        function calculateTrackBounds(points) { if (!points || points.length === 0) return null; let minLat = points[0].lat, maxLat = points[0].lat, minLon = points[0].lon, maxLon = points[0].lon; points.forEach(point => { minLat = Math.min(minLat, point.lat); maxLat = Math.max(maxLat, point.lat); minLon = Math.min(minLon, point.lon); maxLon = Math.max(maxLon, point.lon); }); return { southWest: [minLat, minLon], northEast: [maxLat, maxLon], center: [(minLat + maxLat) / 2, (minLon + maxLon) / 2], latSpan: maxLat - minLat, lonSpan: maxLon - minLon }; }
+        function calculateOptimalZoom(bounds) { const maxSpan = Math.max(bounds.latSpan, bounds.lonSpan); let zoom; if (maxSpan > 10) zoom = 6; else if (maxSpan > 5) zoom = 8; else if (maxSpan > 1) zoom = 10; else if (maxSpan > 0.5) zoom = 12; else if (maxSpan > 0.1) zoom = 14; else if (maxSpan > 0.01) zoom = 16; else zoom = 18; return zoom; }
+        function calculateTrackDistance(points) { if (!points || points.length < 2) return 0; let totalDistance = 0; for (let i = 1; i < points.length; i++) { const prev = points[i - 1], curr = points[i]; const R = 6371000, dLat = (curr.lat - prev.lat) * Math.PI / 180, dLon = (curr.lon - prev.lon) * Math.PI / 180, a = Math.sin(dLat/2) * Math.sin(dLat/2) + Math.cos(prev.lat * Math.PI / 180) * Math.cos(curr.lat * Math.PI / 180) * Math.sin(dLon/2) * Math.sin(dLon/2), c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a)); totalDistance += R * c; } return totalDistance; }
+        
         function displayTrack(points) {
             if (trackLayer) map.removeLayer(trackLayer);
             
@@ -270,76 +285,62 @@
             if (!bounds) return;
             
             const distance = calculateTrackDistance(points);
-            const duration = points.length > 1 ? 
-                new Date(points[points.length - 1].time) - new Date(points[0].time) : 0;
+            const duration = points.length > 1 ? new Date(points[points.length - 1].time) - new Date(points[0].time) : 0;
             
-            trackInfoDiv.innerHTML = `
-                <strong>Informações do Percurso:</strong><br>
-                📍 Pontos: ${points.length} | 
-                📏 Distância: ${(distance / 1000).toFixed(2)} km | 
-                ⏱️ Duração: ${Math.round(duration / 60000)} min | 
-                🗺️ Área: ${bounds.latSpan.toFixed(4)}° × ${bounds.lonSpan.toFixed(4)}°
-            `;
+            trackInfoDiv.innerHTML = `<strong>Informações do Percurso:</strong><br>📍 Pontos: ${points.length} | 📏 Distância: ${(distance / 1000).toFixed(2)} km | ⏱️ Duração: ${Math.round(duration / 60000)} min`;
             
             const latLngs = points.map(p => [p.lat, p.lon]);
-            trackLayer = L.polyline(latLngs, { 
-                color: '#bb86fc', 
-                weight: 3,
-                opacity: 0.8 
-            }).addTo(map);
+            trackLayer = L.polyline(latLngs, { color: '#bb86fc', weight: 3, opacity: 0.8 }).addTo(map);
             
             const optimalZoom = calculateOptimalZoom(bounds);
             const leafletBounds = L.latLngBounds(bounds.southWest, bounds.northEast);
-            const paddedBounds = leafletBounds.pad(0.1);
-            
-            map.fitBounds(paddedBounds, {
-                maxZoom: Math.min(optimalZoom, 18),
-                padding: [20, 20]
-            });
+            map.fitBounds(leafletBounds.pad(0.1), { maxZoom: Math.min(optimalZoom, 18), padding: [20, 20] });
 
             trackLayer.on('click', (e) => {
-                const clickedLat = e.latlng.lat;
-                const clickedLon = e.latlng.lng;
-
-                let closestPoint = null;
-                let minDistance = Infinity;
-
+                const clickedLat = e.latlng.lat, clickedLon = e.latlng.lng;
+                let closestPoint = null, minDistance = Infinity;
                 gpxDataPoints.forEach(p => {
                     const distance = Math.sqrt(Math.pow(p.lat - clickedLat, 2) + Math.pow(p.lon - clickedLon, 2));
-                    if (distance < minDistance) {
-                        minDistance = distance;
-                        closestPoint = p;
-                    }
+                    if (distance < minDistance) { minDistance = distance; closestPoint = p; }
                 });
 
                 if (closestPoint) {
-                    selectedSyncPoint = closestPoint;
-                    if (marker) map.removeLayer(marker);
-                    marker = L.marker([closestPoint.lat, closestPoint.lon], {
-                        icon: L.icon({
-                            iconUrl: 'data:image/svg+xml;base64,' + btoa(`
-                                <svg xmlns="http://www.w3.org/2000/svg" width="25" height="41" viewBox="0 0 25 41">
-                                    <path fill="#03dac6" stroke="#121212" stroke-width="1" 
-                                          d="M12.5 0C5.6 0 0 5.6 0 12.5c0 12.5 12.5 28.5 12.5 28.5s12.5-16 12.5-28.5C25 5.6 19.4 0 12.5 0z"/>
-                                    <circle fill="#121212" cx="12.5" cy="12.5" r="4"/>
-                                </svg>
-                            `),
-                            iconSize: [25, 41],
-                            iconAnchor: [12, 41],
-                            popupAnchor: [1, -34]
-                        })
-                    }).addTo(map);
-                    
-                    const pointTime = new Date(closestPoint.time).toLocaleString();
-                    syncPointInfo.textContent = `Ponto de sincronização selecionado: ${pointTime}`;
-                    
-                    if (videoFile) {
-                        generateBtn.style.display = 'block';
-                        positionSelector.style.display = 'block';
-                    }
+                    selectSyncPoint(closestPoint, false); // 'false' indica seleção manual
                 }
             });
         }
+        
+        // =====================================================================
+        // ALTERADO: Função centralizada para selecionar um ponto
+        // =====================================================================
+        function selectSyncPoint(point, isSuggestion) {
+            selectedSyncPoint = point;
+
+            // Remove marcadores antigos
+            if (userMarker) map.removeLayer(userMarker);
+            if (suggestionMarker) map.removeLayer(suggestionMarker);
+            
+            const iconToUse = isSuggestion ? suggestionIcon : userIcon;
+            const markerType = isSuggestion ? 'suggestionMarker' : 'userMarker';
+
+            // Cria o novo marcador
+            const newMarker = L.marker([point.lat, point.lon], { icon: iconToUse }).addTo(map);
+
+            if(isSuggestion) {
+                suggestionMarker = newMarker;
+            } else {
+                userMarker = newMarker;
+            }
+            
+            const pointTime = new Date(point.time).toLocaleString('pt-BR', { timeZone: 'UTC' });
+            syncPointInfo.textContent = `Ponto selecionado (${isSuggestion ? 'sugestão' : 'manual'}): ${pointTime} (UTC)`;
+            
+            if (videoFile) {
+                generateBtn.style.display = 'block';
+                positionSelector.style.display = 'block';
+            }
+        }
+
 
         function handleVideoUpload(event) {
             videoFile = event.target.files[0];
@@ -350,6 +351,9 @@
                 generateBtn.style.display = 'block';
                 positionSelector.style.display = 'block';
             }
+            
+            // ALTERADO: Chama a função de sugestão assim que o vídeo é carregado
+            fetchAndApplySuggestion();
         }
 
         function handleGenerate() {
@@ -359,7 +363,6 @@
             }
 
             const selectedPosition = document.querySelector('input[name="overlayPosition"]:checked').value;
-
             generateBtn.disabled = true;
             statusDiv.textContent = 'A enviar ficheiros...';
             progressContainer.style.display = 'block';
@@ -376,44 +379,25 @@
 
             const xhr = new XMLHttpRequest();
             xhr.open('POST', '/process', true);
-
             xhr.upload.onprogress = (event) => {
-                if (event.lengthComputable) {
-                    const percentComplete = Math.round((event.loaded / event.total) * 100);
-                    progressBar.style.width = percentComplete + '%';
-                    progressBar.textContent = percentComplete + '%';
-                }
+                if (event.lengthComputable) { const percentComplete = Math.round((event.loaded / event.total) * 100); progressBar.style.width = percentComplete + '%'; progressBar.textContent = percentComplete + '%'; }
             };
-
             xhr.onload = () => {
                 progressContainer.style.display = 'none';
                 const result = JSON.parse(xhr.responseText);
-                
                 logsPre.textContent = result.logs.join('\n');
                 logsContainer.style.display = 'block';
-
                 if (xhr.status >= 200 && xhr.status < 300) {
                     statusDiv.textContent = 'Sucesso! O seu vídeo está pronto.';
-                    if (result.download_url) {
-                        downloadLink.href = result.download_url;
-                        downloadLink.textContent = 'Descarregar Vídeo Final';
-                        downloadDiv.style.display = 'block';
-                    }
+                    if (result.download_url) { downloadLink.href = result.download_url; downloadLink.textContent = 'Descarregar Vídeo Final'; downloadDiv.style.display = 'block'; }
                 } else {
                     statusDiv.textContent = `Erro: ${result.message || 'Ocorreu um erro no servidor.'}`;
                 }
                 generateBtn.disabled = false;
             };
-
-            xhr.onerror = () => {
-                statusDiv.textContent = 'Erro de rede ao enviar os ficheiros.';
-                generateBtn.disabled = false;
-                progressContainer.style.display = 'none';
-            };
-
+            xhr.onerror = () => { statusDiv.textContent = 'Erro de rede ao enviar os ficheiros.'; generateBtn.disabled = false; progressContainer.style.display = 'none'; };
             xhr.send(formData);
         }
-
     </script>
 </body>
 </html>

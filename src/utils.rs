@@ -1,7 +1,8 @@
 use std::path::Path;
 use std::error::Error;
 use chrono::{DateTime, Duration, Utc};
-use gpx::Waypoint;
+use gpx::{Gpx, Waypoint}; // Adicione Gpx ao "use" no topo do arquivo se não estiver lá
+
 
 pub fn get_video_time_range(video_path: &Path) -> Result<(DateTime<Utc>, DateTime<Utc>), Box<dyn Error>> {
     // Simplifica o tratamento de erros para ser mais genérico
@@ -117,4 +118,28 @@ pub fn calculate_bearing(p1: &Waypoint, p2: &Waypoint) -> f64 {
 
     // Normaliza para um azimute de 0-360 graus
     (initial_bearing_deg + 360.0) % 360.0
+}
+
+/// Encontra o ponto de trilha GPX cujo timestamp é o mais próximo do horário alvo.
+pub fn find_closest_gpx_point(gpx_data: &Gpx, target_time: DateTime<Utc>) -> Option<Waypoint> {
+    gpx_data
+        .tracks
+        .iter()
+        .flat_map(|track| track.segments.iter())
+        .flat_map(|segment| segment.points.iter())
+        // Filtra apenas pontos que têm timestamp
+        .filter_map(|point| {
+            point.time.and_then(|t| t.format().ok()).and_then(|time_str| {
+                if let Ok(point_time) = time_str.parse::<DateTime<Utc>>() {
+                    // Calcula a diferença de tempo absoluta
+                    let duration = (target_time - point_time).num_seconds().abs();
+                    Some((duration, point.clone())) // Clonamos o ponto para retorná-lo
+                } else {
+                    None
+                }
+            })
+        })
+        // Encontra o ponto com a menor diferença de tempo
+        .min_by(|(duration1, _), (duration2, _)| duration1.partial_cmp(duration2).unwrap_or(std::cmp::Ordering::Equal))
+        .map(|(_, point)| point)
 }
