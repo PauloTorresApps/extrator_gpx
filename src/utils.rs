@@ -2,9 +2,23 @@ use std::path::Path;
 use std::error::Error;
 use chrono::{DateTime, Duration, Utc};
 use gpx::Waypoint;
+// NOVO: Importa o tipo de erro do ffprobe para o podermos inspecionar.
+use ffprobe::error::Error as FfprobeError;
 
 pub fn get_video_time_range(video_path: &Path) -> Result<(DateTime<Utc>, DateTime<Utc>), Box<dyn Error>> {
-    let metadata = ffprobe::ffprobe(video_path)?;
+    // CORREÇÃO: Adiciona um tratamento de erros detalhado para a chamada do ffprobe.
+    let metadata = match ffprobe::ffprobe(video_path) {
+        Ok(data) => data,
+        Err(FfprobeError::Io(io_err)) if io_err.kind() == std::io::ErrorKind::NotFound => {
+            // Este é o erro específico para "comando não encontrado".
+            return Err("Comando 'ffprobe' não encontrado. Verifique se o FFmpeg está instalado e se o seu diretório está no PATH do sistema.".into());
+        }
+        Err(e) => {
+            // Para outros erros, propaga-os com mais contexto.
+            return Err(format!("Erro ao executar o ffprobe: {}", e).into());
+        }
+    };
+    
     let start_time = if let Some(stream) = metadata.streams.iter().find(|s| s.codec_type == Some("video".to_string())) {
         if let Some(tags) = &stream.tags {
             if let Some(creation_time_str) = &tags.creation_time {
@@ -37,22 +51,20 @@ fn distance_2d(p1: &Waypoint, p2: &Waypoint) -> f64 {
     EARTH_RADIUS_METERS * c
 }
 
-// CORREÇÃO: Calcula a distância 3D real, considerando a elevação.
+// Calcula a distância 3D real, considerando a elevação.
 fn distance_3d(p1: &Waypoint, p2: &Waypoint) -> f64 {
     let horizontal_distance = distance_2d(p1, p2);
     
     let vertical_distance = match (p1.elevation, p2.elevation) {
         (Some(e1), Some(e2)) => e2 - e1,
-        _ => 0.0, // Se não houver dados de elevação, a distância vertical é zero.
+        _ => 0.0,
     };
 
-    // Usa o Teorema de Pitágoras para obter a distância 3D real.
     (horizontal_distance.powi(2) + vertical_distance.powi(2)).sqrt()
 }
 
 
 pub fn calculate_speed_kmh(p1: &Waypoint, p2: &Waypoint) -> Option<f64> {
-    // CORREÇÃO: Usa a nova função de distância 3D.
     let distance_m = distance_3d(p1, p2);
     if let (Some(time1_str), Some(time2_str)) = (p1.time.as_ref().and_then(|t| t.format().ok()), p2.time.as_ref().and_then(|t| t.format().ok())) {
         if let (Ok(time1), Ok(time2)) = (time1_str.parse::<DateTime<Utc>>(), time2_str.parse::<DateTime<Utc>>()) {
