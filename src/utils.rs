@@ -1,39 +1,39 @@
+// Conteúdo completo e corrigido para src/utils.rs
+
 use std::path::Path;
 use std::error::Error;
-use chrono::{DateTime, Duration, Utc};
-use gpx::{Gpx, Waypoint}; // Adicione Gpx ao "use" no topo do arquivo se não estiver lá
-
+use chrono::{DateTime, Duration, TimeZone, Utc};
+use chrono_tz::America::Sao_Paulo;
+use gpx::{Gpx, Waypoint};
 
 pub fn get_video_time_range(video_path: &Path) -> Result<(DateTime<Utc>, DateTime<Utc>), Box<dyn Error>> {
-    // Simplifica o tratamento de erros para ser mais genérico
-    let metadata = match ffprobe::ffprobe(video_path) {
-        Ok(data) => data,
-        Err(e) => {
-            let error_message = e.to_string();
-            // Verifica se o erro parece ser sobre comando não encontrado
-            if error_message.contains("No such file or directory") || 
-               error_message.contains("not found") ||
-               error_message.contains("cannot find") {
-                return Err("Comando 'ffprobe' não encontrado. Verifique se o FFmpeg está instalado e se o seu diretório está no PATH do sistema.".into());
-            }
-            // Para outros erros, propaga-os com mais contexto
-            return Err(format!("Erro ao executar o ffprobe: {}", error_message).into());
+    let metadata = ffprobe::ffprobe(video_path).map_err(|e| {
+        let error_message = e.to_string();
+        if error_message.contains("No such file or directory") || error_message.contains("not found") {
+            // CORREÇÃO: Usamos Box::from para ser explícito sobre o tipo de erro
+            Box::<dyn Error>::from("Comando 'ffprobe' não encontrado. Verifique se o FFmpeg está instalado e no PATH do sistema.")
+        } else {
+            Box::<dyn Error>::from(format!("Erro ao executar o ffprobe: {}", error_message))
         }
-    };
-    
-    let start_time = if let Some(stream) = metadata.streams.iter().find(|s| s.codec_type == Some("video".to_string())) {
-        if let Some(tags) = &stream.tags {
-            if let Some(creation_time_str) = &tags.creation_time {
-                creation_time_str.parse::<DateTime<Utc>>()?
-            } else { return Err("Tag 'creation_time' não encontrada.".into()); }
-        } else { return Err("Nenhuma tag encontrada.".into()); }
-    } else { return Err("Nenhum stream de vídeo encontrado.".into()); };
-    
+    })?;
+
+    let creation_time_str = metadata.streams
+        .iter()
+        .find(|s| s.codec_type == Some("video".to_string()))
+        .and_then(|s| s.tags.as_ref())
+        .and_then(|t| t.creation_time.as_deref())
+        .ok_or("Tag 'creation_time' não encontrada no stream de vídeo.")?;
+        
+    let naive_datetime_from_video = DateTime::parse_from_rfc3339(creation_time_str)?.naive_utc();
+    let local_datetime = Sao_Paulo.from_local_datetime(&naive_datetime_from_video).single()
+        .ok_or("Não foi possível converter a hora local para o fuso de Brasília.")?;
+    let start_time_utc = local_datetime.with_timezone(&Utc);
+
     let duration_str = metadata.format.duration.ok_or("Duração não encontrada.")?;
     let duration_secs = duration_str.parse::<f64>()?;
     let duration = Duration::microseconds((duration_secs * 1_000_000.0) as i64);
     
-    Ok((start_time, start_time + duration))
+    Ok((start_time_utc, start_time_utc + duration))
 }
 
 // Calcula a distância 2D (horizontal) em metros entre dois pontos de GPS.
@@ -115,10 +115,10 @@ pub fn calculate_bearing(p1: &Waypoint, p2: &Waypoint) -> f64 {
 
     let initial_bearing_rad = y.atan2(x);
     let initial_bearing_deg = initial_bearing_rad.to_degrees();
-
-    // Normaliza para um azimute de 0-360 graus
+    
     (initial_bearing_deg + 360.0) % 360.0
 }
+
 
 /// Encontra o ponto de trilha GPX cujo timestamp é o mais próximo do horário alvo.
 pub fn find_closest_gpx_point(gpx_data: &Gpx, target_time: DateTime<Utc>) -> Option<Waypoint> {
@@ -127,19 +127,16 @@ pub fn find_closest_gpx_point(gpx_data: &Gpx, target_time: DateTime<Utc>) -> Opt
         .iter()
         .flat_map(|track| track.segments.iter())
         .flat_map(|segment| segment.points.iter())
-        // Filtra apenas pontos que têm timestamp
         .filter_map(|point| {
             point.time.and_then(|t| t.format().ok()).and_then(|time_str| {
                 if let Ok(point_time) = time_str.parse::<DateTime<Utc>>() {
-                    // Calcula a diferença de tempo absoluta
                     let duration = (target_time - point_time).num_seconds().abs();
-                    Some((duration, point.clone())) // Clonamos o ponto para retorná-lo
+                    Some((duration, point.clone()))
                 } else {
                     None
                 }
             })
         })
-        // Encontra o ponto com a menor diferença de tempo
         .min_by(|(duration1, _), (duration2, _)| duration1.partial_cmp(duration2).unwrap_or(std::cmp::Ordering::Equal))
         .map(|(_, point)| point)
 }

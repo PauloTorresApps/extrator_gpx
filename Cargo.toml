@@ -10,7 +10,8 @@ edition = "2021"
 [dependencies]
 gpx = "0.10.0"
 ffprobe = "0.4.0"
-chrono = "0.4"
+chrono = { version = "0.4.38", features = ["serde"] }
+chrono-tz = "0.8"
 
 # Dependências para desenho e manipulação de imagens
 image = "0.24"
