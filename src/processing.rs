@@ -57,8 +57,8 @@ fn process_internal(gpx_path: PathBuf, video_path: PathBuf, logs: &mut Vec<Strin
             let synced_points: Vec<&Waypoint> = segment.points.iter().filter(|point| {
                 if let Some(time_str) = point.time.as_ref().and_then(|t| t.format().ok()) {
                     if let Ok(point_time) = time_str.parse::<DateTime<Utc>>() {
-                        // CORREÇÃO: Ajusta o tempo em 3 horas (10800s) + 130 segundos.
-                        let adjusted_point_time = point_time - Duration::seconds(10930);
+                        // Volta a usar o ajuste de tempo fixo.
+                        let adjusted_point_time = point_time - Duration::hours(3);
                         adjusted_point_time >= video_start_time && adjusted_point_time <= video_end_time
                     } else { false }
                 } else { false }
@@ -85,8 +85,7 @@ fn process_internal(gpx_path: PathBuf, video_path: PathBuf, logs: &mut Vec<Strin
 
                 if let Some(time_str) = p2.time.as_ref().and_then(|t| t.format().ok()) {
                      if let Ok(point_time) = time_str.parse::<DateTime<Utc>>() {
-                        // CORREÇÃO: Ajusta o tempo em 3 horas (10800s) + 130 segundos.
-                        let adjusted_point_time = point_time - Duration::seconds(10930);
+                        let adjusted_point_time = point_time - Duration::hours(3);
                         let timestamp_sec = (adjusted_point_time - video_start_time).num_milliseconds() as f64 / 1000.0;
                         frame_infos.push(FrameInfo { path: output_path, timestamp_sec });
                     }
