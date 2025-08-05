@@ -65,6 +65,7 @@
         #logs { white-space: pre-wrap; word-wrap: break-word; max-height: 200px; overflow-y: auto; }
         #download-link { display: none; margin-top: 1rem; text-align: center; }
         #download-link a { color: var(--secondary-color); text-decoration: none; font-weight: bold; font-size: 1.2rem; }
+        .track-info { background-color: #2a2a2a; padding: 0.5rem; border-radius: 4px; font-size: 0.9rem; margin-top: 0.5rem; display: none; }
     </style>
 </head>
 <body>
@@ -76,6 +77,8 @@
             <input type="file" id="gpx-file" accept=".gpx">
             <span id="gpx-info" class="file-info"></span>
         </div>
+
+        <div id="track-info" class="track-info"></div>
 
         <div id="map"></div>
 
@@ -117,6 +120,7 @@
         const progressContainer = document.getElementById('progress-container');
         const progressBar = document.getElementById('progress-bar');
         const mapElement = document.getElementById('map');
+        const trackInfoDiv = document.getElementById('track-info');
 
         // Estado da aplicação
         let gpxFile = null;
@@ -161,6 +165,7 @@
 
                     mapElement.style.display = 'block';
                     syncPointInfo.style.display = 'block';
+                    trackInfoDiv.style.display = 'block';
                     
                     setTimeout(() => map.invalidateSize(), 10); 
 
@@ -171,19 +176,120 @@
                     statusDiv.textContent = `Erro ao processar o ficheiro GPX: ${error.message}`;
                     mapElement.style.display = 'none';
                     syncPointInfo.style.display = 'none';
+                    trackInfoDiv.style.display = 'none';
                     videoInput.disabled = true;
                 }
             };
             reader.readAsText(gpxFile);
         }
 
+        function calculateTrackBounds(points) {
+            if (!points || points.length === 0) return null;
+            
+            let minLat = points[0].lat;
+            let maxLat = points[0].lat;
+            let minLon = points[0].lon;
+            let maxLon = points[0].lon;
+            
+            points.forEach(point => {
+                minLat = Math.min(minLat, point.lat);
+                maxLat = Math.max(maxLat, point.lat);
+                minLon = Math.min(minLon, point.lon);
+                maxLon = Math.max(maxLon, point.lon);
+            });
+            
+            return {
+                southWest: [minLat, minLon],
+                northEast: [maxLat, maxLon],
+                center: [(minLat + maxLat) / 2, (minLon + maxLon) / 2],
+                latSpan: maxLat - minLat,
+                lonSpan: maxLon - minLon
+            };
+        }
+
+        function calculateOptimalZoom(bounds) {
+            // Calcula o zoom baseado na extensão geográfica
+            const latSpan = bounds.latSpan;
+            const lonSpan = bounds.lonSpan;
+            const maxSpan = Math.max(latSpan, lonSpan);
+            
+            // Fórmula aproximada para determinar o zoom ideal
+            let zoom;
+            if (maxSpan > 10) zoom = 6;      // País/região muito grande
+            else if (maxSpan > 5) zoom = 8;   // Região grande
+            else if (maxSpan > 1) zoom = 10;  // Cidade grande
+            else if (maxSpan > 0.5) zoom = 12; // Cidade pequena
+            else if (maxSpan > 0.1) zoom = 14; // Bairro
+            else if (maxSpan > 0.01) zoom = 16; // Quarteirão
+            else zoom = 18;                    // Rua/local específico
+            
+            return zoom;
+        }
+
+        function calculateTrackDistance(points) {
+            if (!points || points.length < 2) return 0;
+            
+            let totalDistance = 0;
+            for (let i = 1; i < points.length; i++) {
+                const prev = points[i - 1];
+                const curr = points[i];
+                
+                // Fórmula de Haversine simplificada para pequenas distâncias
+                const R = 6371000; // Raio da Terra em metros
+                const dLat = (curr.lat - prev.lat) * Math.PI / 180;
+                const dLon = (curr.lon - prev.lon) * Math.PI / 180;
+                const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
+                         Math.cos(prev.lat * Math.PI / 180) * Math.cos(curr.lat * Math.PI / 180) *
+                         Math.sin(dLon/2) * Math.sin(dLon/2);
+                const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+                totalDistance += R * c;
+            }
+            
+            return totalDistance;
+        }
+
         function displayTrack(points) {
             if (trackLayer) map.removeLayer(trackLayer);
             
-            const latLngs = points.map(p => [p.lat, p.lon]);
-            trackLayer = L.polyline(latLngs, { color: 'red' }).addTo(map);
+            const bounds = calculateTrackBounds(points);
+            if (!bounds) return;
             
-            map.fitBounds(trackLayer.getBounds());
+            // Calcula informações do percurso
+            const distance = calculateTrackDistance(points);
+            const duration = points.length > 1 ? 
+                new Date(points[points.length - 1].time) - new Date(points[0].time) : 0;
+            
+            // Mostra informações do percurso
+            trackInfoDiv.innerHTML = `
+                <strong>Informações do Percurso:</strong><br>
+                📍 Pontos: ${points.length} | 
+                📏 Distância: ${(distance / 1000).toFixed(2)} km | 
+                ⏱️ Duração: ${Math.round(duration / 60000)} min | 
+                🗺️ Área: ${bounds.latSpan.toFixed(4)}° × ${bounds.lonSpan.toFixed(4)}°
+            `;
+            
+            const latLngs = points.map(p => [p.lat, p.lon]);
+            trackLayer = L.polyline(latLngs, { 
+                color: '#bb86fc', 
+                weight: 3,
+                opacity: 0.8 
+            }).addTo(map);
+            
+            // Aplica zoom inteligente
+            const optimalZoom = calculateOptimalZoom(bounds);
+            const leafletBounds = L.latLngBounds(bounds.southWest, bounds.northEast);
+            
+            // Adiciona padding ao redor do percurso (10% da área)
+            const paddedBounds = leafletBounds.pad(0.1);
+            
+            // Define a vista com zoom otimizado
+            map.fitBounds(paddedBounds, {
+                maxZoom: Math.min(optimalZoom, 18), // Limita zoom máximo
+                padding: [20, 20] // Padding em pixels
+            });
+            
+            // Log para debug
+            console.log(`Percurso: ${points.length} pontos, Área: ${bounds.latSpan.toFixed(4)}° × ${bounds.lonSpan.toFixed(4)}°, Zoom sugerido: ${optimalZoom}`);
 
             trackLayer.on('click', (e) => {
                 const clickedLat = e.latlng.lat;
@@ -203,7 +309,20 @@
                 if (closestPoint) {
                     selectedSyncPoint = closestPoint;
                     if (marker) map.removeLayer(marker);
-                    marker = L.marker([closestPoint.lat, closestPoint.lon]).addTo(map);
+                    marker = L.marker([closestPoint.lat, closestPoint.lon], {
+                        icon: L.icon({
+                            iconUrl: 'data:image/svg+xml;base64,' + btoa(`
+                                <svg xmlns="http://www.w3.org/2000/svg" width="25" height="41" viewBox="0 0 25 41">
+                                    <path fill="#03dac6" stroke="#121212" stroke-width="1" 
+                                          d="M12.5 0C5.6 0 0 5.6 0 12.5c0 12.5 12.5 28.5 12.5 28.5s12.5-16 12.5-28.5C25 5.6 19.4 0 12.5 0z"/>
+                                    <circle fill="#121212" cx="12.5" cy="12.5" r="4"/>
+                                </svg>
+                            `),
+                            iconSize: [25, 41],
+                            iconAnchor: [12, 41],
+                            popupAnchor: [1, -34]
+                        })
+                    }).addTo(map);
                     
                     const pointTime = new Date(closestPoint.time).toLocaleString();
                     syncPointInfo.textContent = `Ponto de sincronização selecionado: ${pointTime}`;
