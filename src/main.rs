@@ -19,7 +19,6 @@ use uuid::Uuid;
 
 #[tokio::main]
 async fn main() {
-    // Inicializa o sistema de logs para o terminal
     tracing_subscriber::registry()
         .with(
             tracing_subscriber::EnvFilter::try_from_default_env()
@@ -28,16 +27,12 @@ async fn main() {
         .with(tracing_subscriber::fmt::layer())
         .init();
 
-    // Define as rotas da aplicação
     let app = Router::new()
         .route("/process", post(process_files))
-        // Serve a pasta 'static' que contém o nosso frontend (index.html)
         .nest_service("/", ServeDir::new("static"))
-        // Serve a pasta 'output' para que o vídeo final possa ser descarregado
         .nest_service("/output", ServeDir::new("output"))
-        .layer(DefaultBodyLimit::max(1024 * 1024 * 1024)); // Aumenta o limite de upload para 1GB
+        .layer(DefaultBodyLimit::max(1024 * 1024 * 1024)); // 1 GB
 
-    // Inicia o servidor na porta 3000
     let addr = SocketAddr::from(([127, 0, 0, 1], 3000));
     tracing::debug!("A escutar em {}", addr);
     let listener = tokio::net::TcpListener::bind(&addr).await.unwrap();
@@ -51,17 +46,15 @@ struct ProcessResponse {
     logs: Vec<String>,
 }
 
-// Handler que recebe os ficheiros e inicia o processamento
 async fn process_files(mut multipart: Multipart) -> impl IntoResponse {
     let mut gpx_path: Option<PathBuf> = None;
     let mut video_path: Option<PathBuf> = None;
     let mut sync_timestamp: Option<String> = None;
+    let mut overlay_position: Option<String> = None; // NOVO
 
-    // Cria uma pasta para os uploads temporários
     let upload_dir = PathBuf::from("uploads");
     tokio::fs::create_dir_all(&upload_dir).await.unwrap();
 
-    // Processa os ficheiros enviados
     while let Some(field) = multipart.next_field().await.unwrap() {
         let name = field.name().unwrap().to_string();
         
@@ -71,8 +64,6 @@ async fn process_files(mut multipart: Multipart) -> impl IntoResponse {
             let unique_id = Uuid::new_v4();
             let path = upload_dir.join(format!("{}-{}", unique_id, file_name));
             tokio::fs::write(&path, &data).await.unwrap();
-
-            // Converte o caminho relativo para um caminho absoluto.
             let absolute_path = std::fs::canonicalize(&path).unwrap();
 
             if name == "gpxFile" {
@@ -80,18 +71,21 @@ async fn process_files(mut multipart: Multipart) -> impl IntoResponse {
             } else if name == "videoFile" {
                 video_path = Some(absolute_path);
             }
-        } else if name == "syncTimestamp" {
+        } else {
             let data = field.bytes().await.unwrap();
-            sync_timestamp = Some(String::from_utf8(data.to_vec()).unwrap());
+            let value = String::from_utf8(data.to_vec()).unwrap();
+            if name == "syncTimestamp" {
+                sync_timestamp = Some(value);
+            } else if name == "overlayPosition" { // NOVO
+                overlay_position = Some(value);
+            }
         }
     }
 
-    if let (Some(gpx), Some(video), Some(timestamp)) = (gpx_path, video_path, sync_timestamp) {
-        // CORREÇÃO: Executa a função de processamento síncrona num thread de bloqueio
-        // para não bloquear o runtime assíncrono do servidor.
+    if let (Some(gpx), Some(video), Some(timestamp), Some(position)) = (gpx_path, video_path, sync_timestamp, overlay_position) {
         let result = tokio::task::spawn_blocking(move || {
-            processing::run_processing(gpx, video, timestamp)
-        }).await.unwrap(); // .unwrap() lida com o JoinError do spawn_blocking
+            processing::run_processing(gpx, video, timestamp, position)
+        }).await.unwrap();
 
         match result {
             Ok(logs) => {
@@ -114,7 +108,7 @@ async fn process_files(mut multipart: Multipart) -> impl IntoResponse {
         }
     } else {
         let response = ProcessResponse {
-            message: "Erro: Ficheiros ou ponto de sincronização em falta.".to_string(),
+            message: "Erro: Ficheiros, ponto de sincronização ou posição em falta.".to_string(),
             download_url: None,
             logs: vec![],
         };

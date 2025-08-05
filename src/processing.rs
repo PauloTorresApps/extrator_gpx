@@ -15,15 +15,14 @@ pub struct FrameInfo {
     timestamp_sec: f64,
 }
 
-pub fn run_processing(gpx_path: PathBuf, video_path: PathBuf, sync_timestamp_str: String) -> Result<Vec<String>, (String, Vec<String>)> {
+pub fn run_processing(gpx_path: PathBuf, video_path: PathBuf, sync_timestamp_str: String, overlay_position: String) -> Result<Vec<String>, (String, Vec<String>)> {
     let mut logs = Vec::new();
     
     // Usamos uma função interna para facilitar o tratamento de erros com `?`
     // e ainda assim capturar os logs.
-    match process_internal(gpx_path.clone(), video_path.clone(), &mut logs, sync_timestamp_str) {
+    match process_internal(gpx_path.clone(), video_path.clone(), &mut logs, sync_timestamp_str, overlay_position) {
         Ok(_) => {
             logs.push("Processo concluído com sucesso!".to_string());
-            // Limpa os ficheiros após o sucesso.
             cleanup_files(&gpx_path, &mut logs);
             Ok(logs)
         },
@@ -37,7 +36,7 @@ pub fn run_processing(gpx_path: PathBuf, video_path: PathBuf, sync_timestamp_str
     }
 }
 
-fn process_internal(gpx_path: PathBuf, video_path: PathBuf, logs: &mut Vec<String>, sync_timestamp_str: String) -> Result<(), Box<dyn Error>> {
+fn process_internal(gpx_path: PathBuf, video_path: PathBuf, logs: &mut Vec<String>, sync_timestamp_str: String, overlay_position: String) -> Result<(), Box<dyn Error>> {
     let output_dir = "output_frames";
     let final_video_dir = "output";
     fs::create_dir_all(output_dir)?;
@@ -61,10 +60,7 @@ fn process_internal(gpx_path: PathBuf, video_path: PathBuf, logs: &mut Vec<Strin
     let mut frame_counter = 0;
 
     for (track_idx, track) in gpx.tracks.iter().enumerate() {
-        logs.push(format!("A processar Trilha #{}", track_idx + 1));
         for (segment_idx, segment) in track.segments.iter().enumerate() {
-            logs.push(format!("A processar Segmento #{}", segment_idx + 1));
-            
             let synced_points: Vec<&Waypoint> = segment.points.iter().filter(|point| {
                 if let Some(time_str) = point.time.as_ref().and_then(|t| t.format().ok()) {
                     if let Ok(point_time) = time_str.parse::<DateTime<Utc>>() {
@@ -74,11 +70,8 @@ fn process_internal(gpx_path: PathBuf, video_path: PathBuf, logs: &mut Vec<Strin
                 } else { false }
             }).collect();
 
-            if synced_points.len() < 3 {
-                logs.push("Pontos de telemetria insuficientes (< 3).".to_string());
-                continue;
-            }
-            logs.push(format!("Encontrados {} pontos. A gerar imagens...", synced_points.len()));
+            if synced_points.len() < 3 { continue; }
+            logs.push(format!("Segmento {}/{} - Encontrados {} pontos. A gerar imagens...", track_idx + 1, segment_idx + 1, synced_points.len()));
 
             for i in 1..synced_points.len() - 1 {
                 let p1 = synced_points[i - 1];
@@ -101,13 +94,13 @@ fn process_internal(gpx_path: PathBuf, video_path: PathBuf, logs: &mut Vec<Strin
                     }
                 }
             }
-            logs.push("Geração de imagens concluída!".to_string());
         }
     }
 
     if !frame_infos.is_empty() {
+        logs.push("Geração de imagens concluída!".to_string());
         logs.push("A gerar o vídeo final...".to_string());
-        generate_final_video(&video_path, &frame_infos)?;
+        generate_final_video(&video_path, &frame_infos, &overlay_position)?;
         logs.push("Vídeo final gerado com sucesso!".to_string());
     } else {
         logs.push("Nenhum frame foi gerado.".to_string());
@@ -116,8 +109,16 @@ fn process_internal(gpx_path: PathBuf, video_path: PathBuf, logs: &mut Vec<Strin
     Ok(())
 }
 
-fn generate_final_video(video_path: &Path, frame_infos: &[FrameInfo]) -> Result<(), Box<dyn Error>> {
+fn generate_final_video(video_path: &Path, frame_infos: &[FrameInfo], position: &str) -> Result<(), Box<dyn Error>> {
     if frame_infos.is_empty() { return Ok(()); }
+
+    let overlay_coords = match position {
+        "top-left" => "10:10",
+        "top-right" => "main_w-overlay_w-10:10",
+        "bottom-right" => "main_w-overlay_w-10:main_h-overlay_h-10",
+        _ => "10:main_h-overlay_h-10", // Padrão: inferior esquerdo
+    };
+
     let mut complex_filter = String::new();
     let mut inputs: Vec<String> = vec!["-i".to_string(), video_path.to_str().unwrap().to_string()];
     for info in frame_infos.iter() { inputs.push("-i".to_string()); inputs.push(info.path.clone()); }
@@ -131,8 +132,8 @@ fn generate_final_video(video_path: &Path, frame_infos: &[FrameInfo]) -> Result<
         let current_stream = format!("[v{}]", i);
         
         let filter_part = format!(
-            "{}[{}:v]overlay=10:main_h-overlay_h-10:enable='between(t,{},{})'{}",
-            last_stream, i + 1, start_time, end_time,
+            "{}[{}:v]overlay={}:enable='between(t,{},{})'{}",
+            last_stream, i + 1, overlay_coords, start_time, end_time,
             if i == frame_infos.len() - 1 { "".to_string() } else { current_stream.clone() }
         );
         complex_filter.push_str(&filter_part);
@@ -147,18 +148,15 @@ fn generate_final_video(video_path: &Path, frame_infos: &[FrameInfo]) -> Result<
     Ok(())
 }
 
-// CORREÇÃO: A função agora limpa a pasta de uploads e a pasta de frames.
 fn cleanup_files(gpx_path: &Path, logs: &mut Vec<String>) {
     logs.push("A limpar ficheiros temporários...".to_string());
 
-    // Apaga a pasta 'uploads' que contém os ficheiros originais
     if let Some(upload_dir) = gpx_path.parent() {
         if let Err(e) = fs::remove_dir_all(upload_dir) {
             logs.push(format!("Aviso: Não foi possível apagar a pasta de uploads: {}", e));
         }
     }
 
-    // Apaga a pasta 'output_frames' que contém as imagens do velocímetro
     if let Err(e) = fs::remove_dir_all("output_frames") {
         logs.push(format!("Aviso: Não foi possível apagar a pasta de frames temporária: {}", e));
     }

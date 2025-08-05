@@ -38,15 +38,15 @@
             max-width: 800px;
             display: flex;
             flex-direction: column;
-            gap: 1.5rem;
+            gap: 1rem; /* Reduzido o espaçamento geral */
         }
         h1 { text-align: center; color: var(--primary-color); margin-top: 0;}
         .input-group { display: flex; gap: 1rem; align-items: center; }
         label { font-weight: bold; flex-basis: 120px; }
         input[type="file"] { flex-grow: 1; }
         .file-info { font-style: italic; color: #aaa; }
-        #map { height: 400px; width: 100%; border-radius: 8px; background-color: #333; display: none; }
-        #sync-point-info { text-align: center; font-size: 1.1rem; color: var(--secondary-color); display: none; }
+        #map { height: 350px; width: 100%; border-radius: 8px; background-color: #333; display: none; } /* Altura reduzida */
+        #sync-point-info { text-align: center; font-size: 1rem; color: var(--secondary-color); display: none; }
         #progress-container { width: 100%; background-color: #333; border-radius: 4px; display: none; }
         #progress-bar { width: 0%; height: 20px; background-color: var(--primary-color); border-radius: 4px; text-align: center; line-height: 20px; color: #121212; }
         button {
@@ -66,6 +66,14 @@
         #download-link { display: none; margin-top: 1rem; text-align: center; }
         #download-link a { color: var(--secondary-color); text-decoration: none; font-weight: bold; font-size: 1.2rem; }
         .track-info { background-color: #2a2a2a; padding: 0.5rem; border-radius: 4px; font-size: 0.9rem; margin-top: 0.5rem; display: none; }
+        
+        /* NOVO: Estilos para a seleção de posição */
+        .position-selector { display: flex; flex-direction: column; gap: 0.5rem; margin-top: 1rem; }
+        .position-selector fieldset { border: 1px solid var(--border-color); border-radius: 8px; padding: 1rem; }
+        .position-selector legend { color: var(--primary-color); padding: 0 0.5rem; }
+        .position-options { display: flex; justify-content: space-around; }
+        .position-options label { display: flex; align-items: center; gap: 0.5rem; cursor: pointer; }
+
     </style>
 </head>
 <body>
@@ -79,9 +87,7 @@
         </div>
 
         <div id="track-info" class="track-info"></div>
-
         <div id="map"></div>
-
         <div id="sync-point-info">Clique num ponto no mapa para o definir como o início da sincronização.</div>
 
         <div class="input-group">
@@ -90,7 +96,20 @@
             <span id="video-info" class="file-info"></span>
         </div>
 
-        <button id="generate-btn" style="display: none;">3. Confirmar Ponto e Gerar Vídeo</button>
+        <!-- NOVO: Seletor de Posição -->
+        <div id="position-selector" class="position-selector" style="display: none;">
+            <fieldset>
+                <legend>3. Posição do Overlay</legend>
+                <div class="position-options">
+                    <label><input type="radio" name="overlayPosition" value="bottom-left" checked> Inferior Esquerdo</label>
+                    <label><input type="radio" name="overlayPosition" value="top-left"> Superior Esquerdo</label>
+                    <label><input type="radio" name="overlayPosition" value="top-right"> Superior Direito</label>
+                    <label><input type="radio" name="overlayPosition" value="bottom-right"> Inferior Direito</label>
+                </div>
+            </fieldset>
+        </div>
+
+        <button id="generate-btn" style="display: none;">4. Confirmar e Gerar Vídeo</button>
         
         <div id="progress-container">
             <div id="progress-bar">0%</div>
@@ -105,7 +124,6 @@
     </div>
 
     <script>
-        // Elementos da UI
         const gpxInput = document.getElementById('gpx-file');
         const videoInput = document.getElementById('video-file');
         const generateBtn = document.getElementById('generate-btn');
@@ -121,6 +139,7 @@
         const progressBar = document.getElementById('progress-bar');
         const mapElement = document.getElementById('map');
         const trackInfoDiv = document.getElementById('track-info');
+        const positionSelector = document.getElementById('position-selector');
 
         // Estado da aplicação
         let gpxFile = null;
@@ -153,7 +172,6 @@
             reader.onload = (e) => {
                 try {
                     const gpxContent = e.target.result;
-                    // CORREÇÃO: A biblioteca é instanciada primeiro e depois processa o conteúdo.
                     const gpx = new gpxParser();
                     gpx.parse(gpxContent);
 
@@ -208,20 +226,18 @@
         }
 
         function calculateOptimalZoom(bounds) {
-            // Calcula o zoom baseado na extensão geográfica
             const latSpan = bounds.latSpan;
             const lonSpan = bounds.lonSpan;
             const maxSpan = Math.max(latSpan, lonSpan);
             
-            // Fórmula aproximada para determinar o zoom ideal
             let zoom;
-            if (maxSpan > 10) zoom = 6;      // País/região muito grande
-            else if (maxSpan > 5) zoom = 8;   // Região grande
-            else if (maxSpan > 1) zoom = 10;  // Cidade grande
-            else if (maxSpan > 0.5) zoom = 12; // Cidade pequena
-            else if (maxSpan > 0.1) zoom = 14; // Bairro
-            else if (maxSpan > 0.01) zoom = 16; // Quarteirão
-            else zoom = 18;                    // Rua/local específico
+            if (maxSpan > 10) zoom = 6;
+            else if (maxSpan > 5) zoom = 8;
+            else if (maxSpan > 1) zoom = 10;
+            else if (maxSpan > 0.5) zoom = 12;
+            else if (maxSpan > 0.1) zoom = 14;
+            else if (maxSpan > 0.01) zoom = 16;
+            else zoom = 18;
             
             return zoom;
         }
@@ -234,8 +250,7 @@
                 const prev = points[i - 1];
                 const curr = points[i];
                 
-                // Fórmula de Haversine simplificada para pequenas distâncias
-                const R = 6371000; // Raio da Terra em metros
+                const R = 6371000;
                 const dLat = (curr.lat - prev.lat) * Math.PI / 180;
                 const dLon = (curr.lon - prev.lon) * Math.PI / 180;
                 const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
@@ -254,12 +269,10 @@
             const bounds = calculateTrackBounds(points);
             if (!bounds) return;
             
-            // Calcula informações do percurso
             const distance = calculateTrackDistance(points);
             const duration = points.length > 1 ? 
                 new Date(points[points.length - 1].time) - new Date(points[0].time) : 0;
             
-            // Mostra informações do percurso
             trackInfoDiv.innerHTML = `
                 <strong>Informações do Percurso:</strong><br>
                 📍 Pontos: ${points.length} | 
@@ -275,21 +288,14 @@
                 opacity: 0.8 
             }).addTo(map);
             
-            // Aplica zoom inteligente
             const optimalZoom = calculateOptimalZoom(bounds);
             const leafletBounds = L.latLngBounds(bounds.southWest, bounds.northEast);
-            
-            // Adiciona padding ao redor do percurso (10% da área)
             const paddedBounds = leafletBounds.pad(0.1);
             
-            // Define a vista com zoom otimizado
             map.fitBounds(paddedBounds, {
-                maxZoom: Math.min(optimalZoom, 18), // Limita zoom máximo
-                padding: [20, 20] // Padding em pixels
+                maxZoom: Math.min(optimalZoom, 18),
+                padding: [20, 20]
             });
-            
-            // Log para debug
-            console.log(`Percurso: ${points.length} pontos, Área: ${bounds.latSpan.toFixed(4)}° × ${bounds.lonSpan.toFixed(4)}°, Zoom sugerido: ${optimalZoom}`);
 
             trackLayer.on('click', (e) => {
                 const clickedLat = e.latlng.lat;
@@ -329,6 +335,7 @@
                     
                     if (videoFile) {
                         generateBtn.style.display = 'block';
+                        positionSelector.style.display = 'block';
                     }
                 }
             });
@@ -341,6 +348,7 @@
             videoInfo.textContent = videoFile.name;
             if (selectedSyncPoint) {
                 generateBtn.style.display = 'block';
+                positionSelector.style.display = 'block';
             }
         }
 
@@ -349,6 +357,8 @@
                 statusDiv.textContent = "Erro: Por favor, selecione os dois ficheiros e um ponto de sincronização.";
                 return;
             }
+
+            const selectedPosition = document.querySelector('input[name="overlayPosition"]:checked').value;
 
             generateBtn.disabled = true;
             statusDiv.textContent = 'A enviar ficheiros...';
@@ -362,6 +372,7 @@
             formData.append('gpxFile', gpxFile);
             formData.append('videoFile', videoFile);
             formData.append('syncTimestamp', selectedSyncPoint.time.toISOString());
+            formData.append('overlayPosition', selectedPosition);
 
             const xhr = new XMLHttpRequest();
             xhr.open('POST', '/process', true);
@@ -402,6 +413,7 @@
 
             xhr.send(formData);
         }
+
     </script>
 </body>
 </html>
