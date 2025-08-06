@@ -9,6 +9,7 @@
     <script src="https://cdn.jsdelivr.net/npm/gpxparser@3.0.8/dist/GPXParser.min.js"></script>
 
     <style>
+        /* O seu CSS permanece o mesmo */
         :root {
             --bg-color: #121212;
             --surface-color: #1e1e1e;
@@ -85,49 +86,19 @@
         .files-container { display: grid; grid-template-columns: 1fr 1fr; gap: 2rem; }
         .file-group { display: flex; flex-direction: column; gap: 0.8rem; }
         .file-group-label { font-weight: 600; color: var(--primary-color); font-size: 1rem; }
-        
-        /* ======================================================= */
-        /* INÍCIO: ALTERAÇÕES NO SELETOR DE POSIÇÃO                */
-        /* ======================================================= */
-        #position-selector { justify-content: center; width: 100%; }
-        .position-container {
-            display: flex;
-            padding: 0.8rem; /* Padding reduzido */
-            border: 2px solid var(--border-color);
-            border-radius: 16px;
-            width: fit-content;
-            justify-content: center;
-            align-items: center;
-            background: rgba(42, 42, 42, 0.6);
-            transition: all 0.3s ease;
-        }
+        #position-selector { display: none; justify-content: center; width: 100%; }
+        .position-container { display: flex; padding: 0.8rem; border: 2px solid var(--border-color); border-radius: 16px; width: fit-content; justify-content: center; align-items: center; background: rgba(42, 42, 42, 0.6); transition: all 0.3s ease; }
         .position-container:hover { border-color: var(--primary-color); background: rgba(42, 42, 42, 0.8); }
         .position-container legend { color: var(--primary-color); font-weight: bold; padding: 0 1rem; margin-left: 1rem; background: var(--surface-color); border-radius: 8px; }
-        
-        .position-grid {
-            display: grid;
-            grid-template-columns: 50px 50px; /* Tamanho reduzido em ~30% */
-            grid-template-rows: 50px 50px;   /* Tamanho reduzido em ~30% */
-            gap: 6px;                       /* Gap reduzido */
-        }
+        .position-grid { display: grid; grid-template-columns: 50px 50px; grid-template-rows: 50px 50px; gap: 6px; }
         .position-grid input[type="radio"] { display: none; }
         .position-grid-cell { border-radius: 12px; cursor: pointer; display: flex; align-items: center; justify-content: center; color: var(--text-color); transition: all 0.3s ease; border: 2px solid transparent; background: rgba(68, 68, 68, 0.5); position: relative; overflow: hidden; }
         .position-grid-cell::before { content: ''; position: absolute; top: 0; left: 0; right: 0; bottom: 0; background: radial-gradient(circle at center, rgba(187, 134, 252, 0.1), transparent); opacity: 0; transition: opacity 0.3s ease; pointer-events: none; }
         .position-grid-cell:hover::before { opacity: 1; }
-        
-        .position-grid-cell svg {
-            width: 26px;  /* Tamanho reduzido */
-            height: 26px; /* Tamanho reduzido */
-            transition: transform 0.3s ease;
-            z-index: 1;
-        }
+        .position-grid-cell svg { width: 26px; height: 26px; transition: transform 0.3s ease; z-index: 1; }
         .position-grid-cell:hover { background: rgba(68, 68, 68, 0.8); transform: scale(1.05); }
         .position-grid-cell:has(input:checked) { background: linear-gradient(135deg, var(--primary-color), #a374e8); color: var(--bg-color); border-color: var(--primary-color); box-shadow: 0 0 20px rgba(187, 134, 252, 0.4); }
         .position-grid-cell:has(input:checked) svg { transform: scale(1.1); }
-        /* ======================================================= */
-        /* FIM: ALTERAÇÕES NO SELETOR DE POSIÇÃO                   */
-        /* ======================================================= */
-
         #status { text-align: center; padding: 1rem; background: rgba(42, 42, 42, 0.6); border-radius: 12px; border: 1px solid var(--border-color); font-weight: 500; }
         @media (max-width: 768px) {
             #app { padding: 1rem; margin: 0.5rem; }
@@ -141,10 +112,7 @@
         <h1>🎬 Sincronização Interativa GPX + Vídeo</h1>
         
         <div class="section">
-            <div class="section-title">
-                <span class="step-number">1</span>
-                Selecionar Ficheiros
-            </div>
+            <div class="section-title"><span class="step-number">1</span>Selecionar Ficheiros</div>
             <div class="files-container">
                 <div class="file-group">
                     <label class="file-group-label">📁 Ficheiro GPX</label>
@@ -156,7 +124,7 @@
                 </div>
                 <div class="file-group">
                     <label class="file-group-label">🎥 Ficheiro de Vídeo</label>
-                    <label class="file-upload-label" for="video-file">
+                    <label class="file-upload-label">
                         Escolher Vídeo
                         <input type="file" id="video-file" accept="video/*" disabled>
                     </label>
@@ -167,10 +135,7 @@
         </div>
 
         <div class="section" id="map-section" style="display: none;">
-            <div class="section-title">
-                <span class="step-number">2</span>
-                Selecionar Ponto de Sincronização
-            </div>
+            <div class="section-title"><span class="step-number">2</span>Selecionar Ponto de Sincronização</div>
             <div id="map"></div>
             <div id="sync-point-info">🎯 Clique num ponto no mapa para o definir como o início da sincronização.</div>
         </div>
@@ -178,36 +143,18 @@
         <div id="position-section" class="section" style="display: none;">
             <div id="position-selector">
                 <fieldset class="position-container">
-                    <legend>
-                        <span class="step-number">3</span>
-                        Posição do Overlay
-                    </legend>
+                    <legend><span class="step-number">3</span>Posição do Overlay</legend>
                     <div class="position-grid">
-                        <label class="position-grid-cell">
-                            <input type="radio" name="overlayPosition" value="top-left">
-                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><path d="M12 4 L10.59 5.41 L16.17 11 H4 V13 H16.17 L10.59 18.59 L12 20 L20 12 Z" transform="rotate(-135 12 12)"/></svg>
-                        </label>
-                        <label class="position-grid-cell">
-                            <input type="radio" name="overlayPosition" value="top-right">
-                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><path d="M12 4 L10.59 5.41 L16.17 11 H4 V13 H16.17 L10.59 18.59 L12 20 L20 12 Z" transform="rotate(-45 12 12)"/></svg>
-                        </label>
-                        <label class="position-grid-cell">
-                            <input type="radio" name="overlayPosition" value="bottom-left" checked>
-                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><path d="M12 4 L10.59 5.41 L16.17 11 H4 V13 H16.17 L10.59 18.59 L12 20 L20 12 Z" transform="rotate(135 12 12)"/></svg>
-                        </label>
-                        <label class="position-grid-cell">
-                            <input type="radio" name="overlayPosition" value="bottom-right">
-                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><path d="M12 4 L10.59 5.41 L16.17 11 H4 V13 H16.17 L10.59 18.59 L12 20 L20 12 Z" transform="rotate(45 12 12)"/></svg>
-                        </label>
+                        <label class="position-grid-cell"><input type="radio" name="overlayPosition" value="top-left"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><path d="M12 4 L10.59 5.41 L16.17 11 H4 V13 H16.17 L10.59 18.59 L12 20 L20 12 Z" transform="rotate(-135 12 12)"/></svg></label>
+                        <label class="position-grid-cell"><input type="radio" name="overlayPosition" value="top-right"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><path d="M12 4 L10.59 5.41 L16.17 11 H4 V13 H16.17 L10.59 18.59 L12 20 L20 12 Z" transform="rotate(-45 12 12)"/></svg></label>
+                        <label class="position-grid-cell"><input type="radio" name="overlayPosition" value="bottom-left" checked><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><path d="M12 4 L10.59 5.41 L16.17 11 H4 V13 H16.17 L10.59 18.59 L12 20 L20 12 Z" transform="rotate(135 12 12)"/></svg></label>
+                        <label class="position-grid-cell"><input type="radio" name="overlayPosition" value="bottom-right"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><path d="M12 4 L10.59 5.41 L16.17 11 H4 V13 H16.17 L10.59 18.59 L12 20 L20 12 Z" transform="rotate(45 12 12)"/></svg></label>
                     </div>
                 </fieldset>
             </div>
         </div>
 
-        <button id="generate-btn" style="display: none;">
-            🚀 Confirmar e Gerar Vídeo
-        </button>
-        
+        <button id="generate-btn" style="display: none;">🚀 Confirmar e Gerar Vídeo</button>
         <div id="progress-container"><div id="progress-bar">0%</div></div>
         <div id="status">Selecione um ficheiro GPX para começar.</div>
         <div id="download-link"><a href="#">📥 Descarregar Vídeo Final</a></div>
@@ -238,18 +185,72 @@
         gpxInput.addEventListener('change', handleGpxUpload);
         videoInput.addEventListener('change', handleVideoUpload);
         generateBtn.addEventListener('click', handleGenerate);
-        async function fetchAndApplySuggestion() { if (!gpxFile || !videoFile) return; statusDiv.textContent = 'Analisando ficheiros para sugerir ponto de sincronização...'; const formData = new FormData(); formData.append('gpxFile', gpxFile); formData.append('videoFile', videoFile); try { const response = await fetch('/suggest', { method: 'POST', body: formData, }); const data = await response.json(); if (response.ok && data.timestamp) { statusDiv.textContent = 'Sugestão automática aplicada! Pode ajustar no mapa se necessário.'; const suggestedPoint = { lat: data.latitude, lon: data.longitude, time: new Date(data.timestamp), }; selectSyncPoint(suggestedPoint, true); } else { statusDiv.textContent = `Não foi possível obter sugestão: ${data.message}. Por favor, selecione um ponto manualmente no mapa.`; } } catch (error) { console.error("Erro ao contactar o endpoint /suggest:", error); statusDiv.textContent = 'Erro de comunicação ao obter sugestão. Selecione um ponto manualmente.'; } }
+        
+        async function fetchAndApplySuggestion() {
+            if (!gpxFile || !videoFile) return;
+            statusDiv.textContent = 'Analisando ficheiros para sugerir ponto e percurso...';
+            const formData = new FormData();
+            formData.append('gpxFile', gpxFile);
+            formData.append('videoFile', videoFile);
+            try {
+                const response = await fetch('/suggest', { method: 'POST', body: formData });
+                const data = await response.json();
+
+                if (data.interpolated_points && data.interpolated_points.length > 0) {
+                    statusDiv.textContent = "Percurso de alta precisão carregado do servidor.";
+                    // --- INÍCIO DA CORREÇÃO ---
+                    // Atualiza a variável global com os dados interpolados para o clique
+                    gpxDataPoints = data.interpolated_points;
+                    // Desenha o mapa com esses mesmos dados
+                    displayTrack(gpxDataPoints);
+                    // --- FIM DA CORREÇÃO ---
+                }
+
+                if (response.ok && data.timestamp) {
+                    const suggestedPoint = { lat: data.latitude, lon: data.longitude, time: new Date(data.timestamp) };
+                    selectSyncPoint(suggestedPoint, true);
+                    statusDiv.textContent = 'Sugestão automática aplicada! Pode ajustar no mapa se necessário.';
+                } else {
+                    if (!data.interpolated_points) {
+                        statusDiv.textContent = `Não foi possível obter sugestão: ${data.message || 'Erro desconhecido'}. Selecione um ponto manualmente.`;
+                    }
+                }
+            } catch (error) {
+                console.error("Erro ao contactar o endpoint /suggest:", error);
+                statusDiv.textContent = 'Erro de comunicação ao obter sugestão. Selecione um ponto manualmente.';
+            }
+        }
+
         const suggestionIcon = L.icon({ iconUrl: 'data:image/svg+xml;base64,' + btoa(`<svg xmlns="http://www.w3.org/2000/svg" width="25" height="41" viewBox="0 0 25 41"><path fill="#2E8B57" stroke="#FFFFFF" stroke-width="1.5" d="M12.5 0C5.6 0 0 5.6 0 12.5c0 12.5 12.5 28.5 12.5 28.5s12.5-16 12.5-28.5C25 5.6 19.4 0 12.5 0z"/><circle fill="#FFFFFF" cx="12.5" cy="12.5" r="4"/></svg>`), iconSize: [25, 41], iconAnchor: [12, 41], popupAnchor: [1, -34] });
         const userIcon = L.icon({ iconUrl: 'data:image/svg+xml;base64,' + btoa(`<svg xmlns="http://www.w3.org/2000/svg" width="25" height="41" viewBox="0 0 25 41"><path fill="#03dac6" stroke="#121212" stroke-width="1" d="M12.5 0C5.6 0 0 5.6 0 12.5c0 12.5 12.5 28.5 12.5 28.5s12.5-16 12.5-28.5C25 5.6 19.4 0 12.5 0z"/><circle fill="#121212" cx="12.5" cy="12.5" r="4"/></svg>`), iconSize: [25, 41], iconAnchor: [12, 41], popupAnchor: [1, -34] });
-        function handleGpxUpload(event) { gpxFile = event.target.files[0]; if (!gpxFile) return; gpxInfo.textContent = gpxFile.name; statusDiv.textContent = "Ficheiro GPX carregado. A processar o percurso..."; const reader = new FileReader(); reader.onload = (e) => { try { const gpxContent = e.target.result; const gpx = new gpxParser(); gpx.parse(gpxContent); if (!gpx.tracks || gpx.tracks.length === 0) { throw new Error("O ficheiro GPX não contém nenhum percurso (track) válido."); } gpxDataPoints = gpx.tracks[0].points; trackInfoDiv.style.display = 'block'; displayTrack(gpxDataPoints); videoInput.disabled = false; videoInfo.textContent = 'Agora pode selecionar o ficheiro de vídeo'; statusDiv.textContent = "Percurso carregado. Selecione o ficheiro de vídeo."; checkAndShowMapSection(); fetchAndApplySuggestion(); } catch (error) { statusDiv.textContent = `Erro ao processar o ficheiro GPX: ${error.message}`; mapSection.style.display = 'none'; trackInfoDiv.style.display = 'none'; videoInput.disabled = true; } }; reader.readAsText(gpxFile); }
-        function handleVideoUpload(event) { videoFile = event.target.files[0]; if (!videoFile) return; videoInfo.textContent = videoFile.name; checkAndShowMapSection(); if (selectedSyncPoint) { generateBtn.style.display = 'block'; positionSection.style.display = 'block'; } fetchAndApplySuggestion(); }
+        
+        function handleGpxUpload(event) {
+            gpxFile = event.target.files[0];
+            if (!gpxFile) return;
+            gpxInfo.textContent = gpxFile.name;
+            statusDiv.textContent = "Ficheiro GPX carregado. Selecione o ficheiro de vídeo.";
+            videoInput.disabled = false;
+            videoInfo.textContent = 'Agora pode selecionar o ficheiro de vídeo';
+            
+            // Apenas chama a função principal. Não faz mais nada.
+            fetchAndApplySuggestion();
+        }
+
+        function handleVideoUpload(event) {
+            videoFile = event.target.files[0];
+            if (!videoFile) return;
+            videoInfo.textContent = videoFile.name;
+            checkAndShowMapSection();
+            
+            // Apenas chama a função principal.
+            fetchAndApplySuggestion();
+        }
+
         function checkAndShowMapSection() { if (gpxFile && videoFile) { mapSection.style.display = 'block'; syncPointInfo.style.display = 'block'; setTimeout(() => map.invalidateSize(), 100); } }
-        function calculateTrackBounds(points) { if (!points || points.length === 0) return null; let minLat = points[0].lat, maxLat = points[0].lat, minLon = points[0].lon, maxLon = points[0].lon; points.forEach(point => { minLat = Math.min(minLat, point.lat); maxLat = Math.max(maxLat, point.lat); minLon = Math.min(minLon, point.lon); maxLon = Math.max(maxLon, point.lon); }); return { southWest: [minLat, minLon], northEast: [maxLat, maxLon], center: [(minLat + maxLat) / 2, (minLon + maxLon) / 2], latSpan: maxLat - minLat, lonSpan: maxLon - minLon }; }
-        function calculateOptimalZoom(bounds) { const maxSpan = Math.max(bounds.latSpan, bounds.lonSpan); let zoom; if (maxSpan > 10) zoom = 6; else if (maxSpan > 5) zoom = 8; else if (maxSpan > 1) zoom = 10; else if (maxSpan > 0.5) zoom = 12; else if (maxSpan > 0.1) zoom = 14; else if (maxSpan > 0.01) zoom = 16; else zoom = 18; return zoom; }
+        function calculateTrackBounds(points) { if (!points || points.length === 0) return null; let minLat = points[0].lat, maxLat = points[0].lat, minLon = points[0].lon, maxLon = points[0].lon; points.forEach(point => { minLat = Math.min(minLat, point.lat); maxLat = Math.max(maxLat, point.lat); minLon = Math.min(minLon, point.lon); maxLon = Math.max(maxLon, point.lon); }); return { southWest: [minLat, minLon], northEast: [maxLat, maxLon] }; }
         function calculateTrackDistance(points) { if (!points || points.length < 2) return 0; let totalDistance = 0; for (let i = 1; i < points.length; i++) { const prev = points[i - 1], curr = points[i]; const R = 6371000, dLat = (curr.lat - prev.lat) * Math.PI / 180, dLon = (curr.lon - prev.lon) * Math.PI / 180, a = Math.sin(dLat/2) * Math.sin(dLat/2) + Math.cos(prev.lat * Math.PI / 180) * Math.cos(curr.lat * Math.PI / 180) * Math.sin(dLon/2) * Math.sin(dLon/2), c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a)); totalDistance += R * c; } return totalDistance; }
-        function displayTrack(points) { if (trackLayer) map.removeLayer(trackLayer); const bounds = calculateTrackBounds(points); if (!bounds) return; const distance = calculateTrackDistance(points); const duration = points.length > 1 ? new Date(points[points.length - 1].time) - new Date(points[0].time) : 0; trackInfoDiv.innerHTML = `<strong>Informações do Percurso:</strong><br>📍 Pontos: ${points.length} | 📏 Distância: ${(distance / 1000).toFixed(2)} km | ⏱️ Duração: ${Math.round(duration / 60000)} min`; const latLngs = points.map(p => [p.lat, p.lon]); trackLayer = L.polyline(latLngs, { color: '#bb86fc', weight: 3, opacity: 0.8 }).addTo(map); const optimalZoom = calculateOptimalZoom(bounds); const leafletBounds = L.latLngBounds(bounds.southWest, bounds.northEast); map.fitBounds(leafletBounds.pad(0.1), { maxZoom: Math.min(optimalZoom, 18), padding: [20, 20] }); trackLayer.on('click', (e) => { const clickedLat = e.latlng.lat, clickedLon = e.latlng.lng; let closestPoint = null, minDistance = Infinity; gpxDataPoints.forEach(p => { const distance = Math.sqrt(Math.pow(p.lat - clickedLat, 2) + Math.pow(p.lon - clickedLon, 2)); if (distance < minDistance) { minDistance = distance; closestPoint = p; } }); if (closestPoint) { selectSyncPoint(closestPoint, false); } }); }
+        function displayTrack(points) { if (trackLayer) map.removeLayer(trackLayer); const bounds = calculateTrackBounds(points); if (!bounds) return; const distance = calculateTrackDistance(points); trackInfoDiv.style.display = 'block'; trackInfoDiv.innerHTML = `<strong>Informações do Percurso (Alta Precisão):</strong><br>📍 Pontos: ${points.length} | 📏 Distância: ${(distance / 1000).toFixed(2)} km`; const latLngs = points.map(p => [p.lat, p.lon]); trackLayer = L.polyline(latLngs, { color: '#bb86fc', weight: 3, opacity: 0.8 }).addTo(map); const leafletBounds = L.latLngBounds(bounds.southWest, bounds.northEast); map.fitBounds(leafletBounds.pad(0.1), { padding: [20, 20] }); trackLayer.on('click', (e) => { const clickedLat = e.latlng.lat, clickedLon = e.latlng.lng; let closestPoint = null, minDistance = Infinity; gpxDataPoints.forEach(p => { const distance = Math.sqrt(Math.pow(p.lat - clickedLat, 2) + Math.pow(p.lon - clickedLon, 2)); if (distance < minDistance) { minDistance = distance; closestPoint = p; } }); if (closestPoint) { selectSyncPoint(closestPoint, false); } }); }
         function selectSyncPoint(point, isSuggestion) { selectedSyncPoint = point; if (userMarker) map.removeLayer(userMarker); if (suggestionMarker) map.removeLayer(suggestionMarker); const iconToUse = isSuggestion ? suggestionIcon : userIcon; const newMarker = L.marker([point.lat, point.lon], { icon: iconToUse }).addTo(map); if(isSuggestion) { suggestionMarker = newMarker; } else { userMarker = newMarker; } const pointTime = new Date(point.time).toLocaleString('pt-BR', { timeZone: 'UTC' }); syncPointInfo.textContent = `Ponto selecionado (${isSuggestion ? 'sugestão' : 'manual'}): ${pointTime} (UTC)`; if (videoFile) { generateBtn.style.display = 'block'; positionSection.style.display = 'block'; } }
-        function handleVideoUpload(event) { videoFile = event.target.files[0]; if (!videoFile) return; videoInfo.textContent = videoFile.name; checkAndShowMapSection(); if (selectedSyncPoint) { generateBtn.style.display = 'block'; positionSection.style.display = 'block'; } fetchAndApplySuggestion(); }
         function handleGenerate() { if (!gpxFile || !videoFile || !selectedSyncPoint) { statusDiv.textContent = "Erro: Por favor, selecione os dois ficheiros e um ponto de sincronização."; return; } const selectedPosition = document.querySelector('input[name="overlayPosition"]:checked').value; generateBtn.disabled = true; statusDiv.textContent = 'A enviar ficheiros...'; progressContainer.style.display = 'block'; progressBar.style.width = '0%'; progressBar.textContent = '0%'; logsContainer.style.display = 'none'; downloadDiv.style.display = 'none'; const formData = new FormData(); formData.append('gpxFile', gpxFile); formData.append('videoFile', videoFile); formData.append('syncTimestamp', selectedSyncPoint.time.toISOString()); formData.append('overlayPosition', selectedPosition); const xhr = new XMLHttpRequest(); xhr.open('POST', '/process', true); xhr.upload.onprogress = (event) => { if (event.lengthComputable) { const percentComplete = Math.round((event.loaded / event.total) * 100); progressBar.style.width = percentComplete + '%'; progressBar.textContent = percentComplete + '%'; } }; xhr.onload = () => { progressContainer.style.display = 'none'; const result = JSON.parse(xhr.responseText); logsPre.textContent = result.logs.join('\n'); logsContainer.style.display = 'block'; if (xhr.status >= 200 && xhr.status < 300) { statusDiv.textContent = 'Sucesso! O seu vídeo está pronto.'; if (result.download_url) { downloadLink.href = result.download_url; downloadLink.textContent = '📥 Descarregar Vídeo Final'; downloadDiv.style.display = 'block'; } } else { statusDiv.textContent = `Erro: ${result.message || 'Ocorreu um erro no servidor.'}`; } generateBtn.disabled = false; }; xhr.onerror = () => { statusDiv.textContent = 'Erro de rede ao enviar os ficheiros.'; generateBtn.disabled = false; progressContainer.style.display = 'none'; }; xhr.send(formData); }
     </script>
 </body>

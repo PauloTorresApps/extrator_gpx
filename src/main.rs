@@ -1,3 +1,5 @@
+// src/main.rs
+
 // Declara os novos módulos que farão parte do projeto.
 mod drawing;
 mod processing;
@@ -47,20 +49,30 @@ struct ProcessResponse {
     logs: Vec<String>,
 }
 
+// --- INÍCIO DA ALTERAÇÃO ---
+#[derive(Serialize)]
+struct PointJson {
+    lat: f64,
+    lon: f64,
+    time: Option<String>, // Adicionado o timestamp
+}
+
 #[derive(Serialize)]
 struct SuggestionResponse {
     message: String,
     latitude: Option<f64>,
     longitude: Option<f64>,
     timestamp: Option<String>,
+    interpolated_points: Option<Vec<PointJson>>,
 }
+// --- FIM DA ALTERAÇÃO ---
 
 
 async fn process_files(mut multipart: Multipart) -> impl IntoResponse {
     let mut gpx_path: Option<PathBuf> = None;
     let mut video_path: Option<PathBuf> = None;
     let mut sync_timestamp: Option<String> = None;
-    let mut overlay_position: Option<String> = None; // NOVO
+    let mut overlay_position: Option<String> = None;
 
     let upload_dir = PathBuf::from("uploads");
     tokio::fs::create_dir_all(&upload_dir).await.unwrap();
@@ -86,7 +98,7 @@ async fn process_files(mut multipart: Multipart) -> impl IntoResponse {
             let value = String::from_utf8(data.to_vec()).unwrap();
             if name == "syncTimestamp" {
                 sync_timestamp = Some(value);
-            } else if name == "overlayPosition" { // NOVO
+            } else if name == "overlayPosition" {
                 overlay_position = Some(value);
             }
         }
@@ -132,17 +144,13 @@ async fn suggest_sync_point(mut multipart: Multipart) -> impl IntoResponse {
 
     let upload_dir = PathBuf::from("uploads_temp_suggest");
     if let Err(e) = tokio::fs::create_dir_all(&upload_dir).await {
-    let error_message = format!("Não foi possível criar diretório temporário: {}", e);
-    
-    return (StatusCode::INTERNAL_SERVER_ERROR, Json(SuggestionResponse { 
-        message: error_message,
-        latitude: None,
-        longitude: None,
-        timestamp: None,
-    }));
-}
+        let error_message = format!("Não foi possível criar diretório temporário: {}", e);
+        return (StatusCode::INTERNAL_SERVER_ERROR, Json(SuggestionResponse { 
+            message: error_message,
+            latitude: None, longitude: None, timestamp: None, interpolated_points: None
+        }));
+    }
 
-    // Processa os ficheiros recebidos
     while let Some(field) = multipart.next_field().await.unwrap() {
         if let Some(file_name) = field.file_name() {
             let name = field.name().unwrap_or("").to_string();
@@ -152,45 +160,55 @@ async fn suggest_sync_point(mut multipart: Multipart) -> impl IntoResponse {
             let path = upload_dir.join(format!("{}-{}", unique_id, file_name));
             tokio::fs::write(&path, &data).await.unwrap();
             
-            if name == "gpxFile" {
-                gpx_path = Some(path);
-            } else if name == "videoFile" {
-                video_path = Some(path);
-            }
+            if name == "gpxFile" { gpx_path = Some(path); }
+            else if name == "videoFile" { video_path = Some(path); }
         }
     }
 
     let response = if let (Some(gpx_p), Some(video_p)) = (gpx_path, video_path) {
-        // Lógica principal
         match utils::get_video_time_range(&video_p) {
             Ok((video_start_time, _)) => {
                 match gpx::read(std::io::BufReader::new(std::fs::File::open(&gpx_p).unwrap())) {
                     Ok(gpx_data) => {
-                        if let Some(closest_point) = utils::find_closest_gpx_point(&gpx_data, video_start_time) {
-                            let point_coords = closest_point.point();
-                            let timestamp_str = closest_point.time.and_then(|t| t.format().ok()).unwrap();
+                        let interpolated_gpx = utils::interpolate_gpx_points(gpx_data, 2);
+                        let closest_point = utils::find_closest_gpx_point(&interpolated_gpx, video_start_time);
+
+                        // --- INÍCIO DA ALTERAÇÃO ---
+                        let points_for_json: Vec<PointJson> = interpolated_gpx.tracks.iter()
+                            .flat_map(|t| t.segments.iter())
+                            .flat_map(|s| s.points.iter())
+                            .map(|p| PointJson { 
+                                lat: p.point().y(), 
+                                lon: p.point().x(),
+                                time: p.time.and_then(|t| t.format().ok()) // Envia o timestamp
+                            })
+                            .collect();
+                        // --- FIM DA ALTERAÇÃO ---
+
+                        if let Some(point) = closest_point {
+                            let point_coords = point.point();
+                            let timestamp_str = point.time.and_then(|t| t.format().ok()).unwrap();
 
                             Json(SuggestionResponse {
-                                message: "Ponto de sincronização sugerido encontrado.".to_string(),
+                                message: "Ponto de sincronização sugerido e percurso interpolado.".to_string(),
                                 latitude: Some(point_coords.y()),
                                 longitude: Some(point_coords.x()),
                                 timestamp: Some(timestamp_str),
+                                interpolated_points: Some(points_for_json),
                             })
                         } else {
-                             Json(SuggestionResponse { message: "Nenhum ponto válido encontrado no GPX.".to_string(), latitude: None, longitude: None, timestamp: None })
+                            Json(SuggestionResponse { message: "Nenhum ponto válido encontrado no GPX.".to_string(), latitude: None, longitude: None, timestamp: None, interpolated_points: Some(points_for_json) })
                         }
                     },
-                    Err(_) => Json(SuggestionResponse { message: "Erro ao ler o ficheiro GPX.".to_string(), latitude: None, longitude: None, timestamp: None }),
+                    Err(_) => Json(SuggestionResponse { message: "Erro ao ler o ficheiro GPX.".to_string(), latitude: None, longitude: None, timestamp: None, interpolated_points: None }),
                 }
             },
-            Err(e) => Json(SuggestionResponse { message: format!("Erro ao ler metadados do vídeo: {}", e), latitude: None, longitude: None, timestamp: None }),
+            Err(e) => Json(SuggestionResponse { message: format!("Erro ao ler metadados do vídeo: {}", e), latitude: None, longitude: None, timestamp: None, interpolated_points: None }),
         }
     } else {
-        Json(SuggestionResponse { message: "Ficheiro de vídeo ou GPX em falta.".to_string(), latitude: None, longitude: None, timestamp: None })
+        Json(SuggestionResponse { message: "Ficheiro de vídeo ou GPX em falta.".to_string(), latitude: None, longitude: None, timestamp: None, interpolated_points: None })
     };
     
-    // Limpa os ficheiros temporários
     let _ = tokio::fs::remove_dir_all(&upload_dir).await;
-
     (StatusCode::OK, response)
 }
