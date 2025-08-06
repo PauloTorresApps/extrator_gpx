@@ -8,7 +8,7 @@ use chrono::{DateTime, Utc};
 use gpx::{Gpx, Waypoint, read};
 
 use crate::drawing::generate_speedometer_image;
-use crate::utils::{calculate_speed_kmh, get_video_time_range, calculate_g_force, calculate_bearing};
+use crate::utils::{calculate_speed_kmh, get_video_time_range, calculate_g_force, calculate_bearing, interpolate_gpx_points};
 
 pub struct FrameInfo {
     path: String,
@@ -53,8 +53,28 @@ fn process_internal(gpx_path: PathBuf, video_path: PathBuf, logs: &mut Vec<Strin
     logs.push(format!("Desvio de tempo calculado: {} segundos.", time_offset.num_seconds()));
 
     logs.push(format!("A ler ficheiro GPX: {:?}", gpx_path));
-    let gpx: Gpx = read(BufReader::new(File::open(&gpx_path)?))?;
+    let original_gpx: Gpx = read(BufReader::new(File::open(&gpx_path)?))?;
     logs.push("Ficheiro GPX lido com sucesso!".to_string());
+    
+    // *** NOVA FUNCIONALIDADE: Interpolação de pontos GPX ***
+    logs.push("A analisar intervalos entre pontos GPX...".to_string());
+    let total_original_points: usize = original_gpx.tracks.iter()
+        .flat_map(|track| track.segments.iter())
+        .map(|segment| segment.points.len())
+        .sum();
+    logs.push(format!("Pontos originais no GPX: {}", total_original_points));
+    
+    // Interpolar pontos para garantir máximo de 2 segundos entre pontos
+    let gpx = interpolate_gpx_points(original_gpx, 2);
+    
+    let total_interpolated_points: usize = gpx.tracks.iter()
+        .flat_map(|track| track.segments.iter())
+        .map(|segment| segment.points.len())
+        .sum();
+    let added_points = total_interpolated_points - total_original_points;
+    logs.push(format!("Pontos após interpolação: {} (adicionados: {})", total_interpolated_points, added_points));
+    logs.push("Interpolação de pontos GPX concluída!".to_string());
+    // *** Fim da nova funcionalidade ***
     
     let mut frame_infos: Vec<FrameInfo> = Vec::new();
     let mut frame_counter = 0;
@@ -71,7 +91,7 @@ fn process_internal(gpx_path: PathBuf, video_path: PathBuf, logs: &mut Vec<Strin
             }).collect();
 
             if synced_points.len() < 3 { continue; }
-            logs.push(format!("Segmento {}/{} - Encontrados {} pontos. A gerar imagens...", track_idx + 1, segment_idx + 1, synced_points.len()));
+            logs.push(format!("Segmento {}/{} - Encontrados {} pontos sincronizados. A gerar imagens...", track_idx + 1, segment_idx + 1, synced_points.len()));
 
             for i in 1..synced_points.len() - 1 {
                 let p1 = synced_points[i - 1];
@@ -99,7 +119,7 @@ fn process_internal(gpx_path: PathBuf, video_path: PathBuf, logs: &mut Vec<Strin
     }
 
     if !frame_infos.is_empty() {
-        logs.push("Geração de imagens concluída!".to_string());
+        logs.push(format!("Geração de {} imagens concluída!", frame_infos.len()));
         logs.push("A gerar o vídeo final...".to_string());
         generate_final_video(&video_path, &frame_infos, &overlay_position)?;
         logs.push("Vídeo final gerado com sucesso!".to_string());
