@@ -70,10 +70,13 @@
             width: 100%;
         }
         .position-container { /* Este é o <fieldset> quadrado */
+            display: flex;
+            padding: 6px; /* O padding de 6px que você pediu */
             border: 1px solid var(--border-color);
             border-radius: 12px;
-            padding: 6px; /* O padding de 6px que você pediu */
             width: fit-content; /* Faz a caixa se ajustar ao conteúdo */
+            justify-content: center; /* Alinha horizontalmente */
+            align-items: center;     /* Alinha verticalmente */
         }
         .position-container legend {
             color: var(--primary-color);
