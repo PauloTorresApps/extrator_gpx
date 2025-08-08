@@ -36,9 +36,51 @@ body {
     flex-direction: column;
     gap: 2rem;
     animation: fadeIn 0.8s ease-out;
+    position: relative;
 }
 @keyframes fadeIn { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
-h1 { text-align: center; color: var(--primary-color); margin: 0; font-size: 2.5rem; font-weight: 300; letter-spacing: -0.5px; text-shadow: 0 0 20px rgba(187, 134, 252, 0.3); }
+
+.lang-switcher {
+    position: absolute;
+    top: 1rem;
+    right: 1.5rem;
+    display: flex;
+    gap: 0.5rem;
+    background: rgba(0,0,0,0.3);
+    padding: 0.5rem;
+    border-radius: 12px;
+    z-index: 10;
+}
+.lang-switcher button {
+    background: transparent;
+    border: none;
+    color: var(--text-color);
+    padding: 0.5rem 1rem;
+    border-radius: 8px;
+    cursor: pointer;
+    font-weight: 600;
+    transition: all 0.3s ease;
+}
+.lang-switcher button.active {
+    background: var(--primary-color);
+    color: var(--bg-color);
+}
+.lang-switcher button:not(.active):hover {
+    background: var(--hover-color);
+}
+
+/* --- INÍCIO DA CORREÇÃO --- */
+h1 { 
+    text-align: center; 
+    color: var(--primary-color); 
+    margin: 2.5rem 0 0 0; /* Adiciona margem no topo para não sobrepor o seletor de idioma */
+    font-size: 2.5rem; 
+    font-weight: 300; 
+    letter-spacing: -0.5px; 
+    text-shadow: 0 0 20px rgba(187, 134, 252, 0.3); 
+}
+/* --- FIM DA CORREÇÃO --- */
+
 .intro-text { text-align: center; color: #aaa; margin-top: -1.5rem; max-width: 600px; margin-left: auto; margin-right: auto; font-size: 0.95rem; }
 .section { background: rgba(42, 42, 42, 0.6); border: 1px solid rgba(68, 68, 68, 0.5); border-radius: 16px; padding: 1.5rem; transition: all 0.3s ease; position: relative; overflow: hidden; }
 .section:hover { background: rgba(42, 42, 42, 0.8); border-color: rgba(187, 134, 252, 0.3); }
@@ -123,9 +165,7 @@ input[type="file"]:disabled + .file-upload-label { background: linear-gradient(1
 .position-grid.hidden {
     display: none;
 }
-/* --- INÍCIO DA CORREÇÃO --- */
 .position-grid-cell input[type="radio"] {
-    /* Oculta completamente o input de rádio original */
     appearance: none;
     -webkit-appearance: none;
     -moz-appearance: none;
@@ -134,7 +174,6 @@ input[type="file"]:disabled + .file-upload-label { background: linear-gradient(1
     width: 0;
     height: 0;
 }
-/* --- FIM DA CORREÇÃO --- */
 .position-grid-cell {
     border-radius: 8px;
     cursor: pointer;

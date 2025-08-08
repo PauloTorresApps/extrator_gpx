@@ -65,7 +65,6 @@ struct SuggestionResponse {
     interpolated_points: Option<Vec<PointJson>>,
 }
 
-// --- INÍCIO DA ALTERAÇÃO: Estrutura para os parâmetros de processamento ---
 #[derive(Debug, Default)]
 struct ProcessParams {
     gpx_path: Option<PathBuf>,
@@ -75,13 +74,11 @@ struct ProcessParams {
     speedo_position: Option<String>,
     add_track_overlay: bool,
     track_position: Option<String>,
+    lang: String,
 }
-// --- FIM DA ALTERAÇÃO ---
 
 async fn process_files(mut multipart: Multipart) -> impl IntoResponse {
-    // --- INÍCIO DA ALTERAÇÃO: Usar a nova estrutura de parâmetros ---
     let mut params = ProcessParams::default();
-    // --- FIM DA ALTERAÇÃO ---
 
     let upload_dir = PathBuf::from("uploads");
     tokio::fs::create_dir_all(&upload_dir).await.unwrap();
@@ -106,16 +103,15 @@ async fn process_files(mut multipart: Multipart) -> impl IntoResponse {
             let data = field.bytes().await.unwrap();
             let value = String::from_utf8(data.to_vec()).unwrap();
             
-            // --- INÍCIO DA ALTERAÇÃO: Mapear todos os novos campos ---
             match name.as_str() {
                 "syncTimestamp" => params.sync_timestamp = Some(value),
                 "addSpeedoOverlay" => params.add_speedo_overlay = value.parse().unwrap_or(false),
                 "speedoPosition" => params.speedo_position = Some(value),
                 "addTrackOverlay" => params.add_track_overlay = value.parse().unwrap_or(false),
                 "trackPosition" => params.track_position = Some(value),
+                "lang" => params.lang = value,
                 _ => {}
             }
-            // --- FIM DA ALTERAÇÃO ---
         }
     }
 
@@ -129,6 +125,7 @@ async fn process_files(mut multipart: Multipart) -> impl IntoResponse {
                 params.speedo_position.unwrap_or_default(),
                 params.add_track_overlay,
                 params.track_position.unwrap_or_default(),
+                params.lang,
             )
         }).await.unwrap();
 
@@ -161,7 +158,6 @@ async fn process_files(mut multipart: Multipart) -> impl IntoResponse {
     }
 }
 
-// A função suggest_sync_point permanece inalterada
 async fn suggest_sync_point(mut multipart: Multipart) -> impl IntoResponse {
     let mut gpx_path: Option<PathBuf> = None;
     let mut video_path: Option<PathBuf> = None;
@@ -190,7 +186,7 @@ async fn suggest_sync_point(mut multipart: Multipart) -> impl IntoResponse {
     }
 
     let response = if let (Some(gpx_p), Some(video_p)) = (gpx_path, video_path) {
-        match utils::get_video_time_range(&video_p) {
+        match utils::get_video_time_range(&video_p, "en") {
             Ok((video_start_time, _)) => {
                 match gpx::read(std::io::BufReader::new(std::fs::File::open(&gpx_p).unwrap())) {
                     Ok(gpx_data) => {
@@ -225,23 +221,23 @@ async fn suggest_sync_point(mut multipart: Multipart) -> impl IntoResponse {
                             let timestamp_str = point.time.and_then(|t| t.format().ok()).unwrap();
 
                             Json(SuggestionResponse {
-                                message: "Ponto de sincronização sugerido e percurso interpolado.".to_string(),
+                                message: "Sync point suggested and track interpolated.".to_string(),
                                 latitude: Some(point_coords.y()),
                                 longitude: Some(point_coords.x()),
                                 timestamp: Some(timestamp_str),
                                 interpolated_points: Some(points_for_json),
                             })
                         } else {
-                            Json(SuggestionResponse { message: "Nenhum ponto GPX encontrado após o início do vídeo.".to_string(), latitude: None, longitude: None, timestamp: None, interpolated_points: Some(points_for_json) })
+                            Json(SuggestionResponse { message: "No GPX point found after video start time.".to_string(), latitude: None, longitude: None, timestamp: None, interpolated_points: Some(points_for_json) })
                         }
                     },
-                    Err(_) => Json(SuggestionResponse { message: "Erro ao ler o ficheiro GPX.".to_string(), latitude: None, longitude: None, timestamp: None, interpolated_points: None }),
+                    Err(_) => Json(SuggestionResponse { message: "Error reading GPX file.".to_string(), latitude: None, longitude: None, timestamp: None, interpolated_points: None }),
                 }
             },
-            Err(e) => Json(SuggestionResponse { message: format!("Erro ao ler metadados do vídeo: {}", e), latitude: None, longitude: None, timestamp: None, interpolated_points: None }),
+            Err(e) => Json(SuggestionResponse { message: format!("Error reading video metadata: {}", e), latitude: None, longitude: None, timestamp: None, interpolated_points: None }),
         }
     } else {
-        Json(SuggestionResponse { message: "Ficheiro de vídeo ou GPX em falta.".to_string(), latitude: None, longitude: None, timestamp: None, interpolated_points: None })
+        Json(SuggestionResponse { message: "Missing video or GPX file.".to_string(), latitude: None, longitude: None, timestamp: None, interpolated_points: None })
     };
     
     let _ = tokio::fs::remove_dir_all(&upload_dir).await;

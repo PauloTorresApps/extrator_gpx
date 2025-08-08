@@ -6,8 +6,7 @@ use imageproc::drawing::{draw_polygon_mut, draw_filled_circle_mut, draw_line_seg
 use rusttype::{Font, Scale};
 use gpx::Gpx;
 
-// A função generate_speedometer_image permanece inalterada
-pub fn generate_speedometer_image(speed_kmh: f64, bearing: f64, g_force: f64, elevation: f64, output_path: &str) -> Result<(), Box<dyn Error>> {
+pub fn generate_speedometer_image(speed_kmh: f64, bearing: f64, g_force: f64, elevation: f64, output_path: &str, lang: &str) -> Result<(), Box<dyn Error>> {
     const SCALE_FACTOR: u32 = 4;
     const FINAL_IMG_SIZE: u32 = 300;
     const IMG_SIZE: u32 = FINAL_IMG_SIZE * SCALE_FACTOR;
@@ -57,12 +56,15 @@ pub fn generate_speedometer_image(speed_kmh: f64, bearing: f64, g_force: f64, el
         }
     }
     
+    // --- INÍCIO DA ALTERAÇÃO: Bússola internacionalizada ---
+    let (east_label, west_label) = if lang == "en" { ("E", "W") } else { ("L", "O") };
     let compass_radius = 40.0 * SCALE_FACTOR as f32;
     let bearing_rad = bearing.to_radians() as f32;
     draw_centered_text_mut(&mut img, white, CENTER.0, CENTER.1 - (compass_radius + 10.0 * SCALE_FACTOR as f32) as i32, scale_text, &font_regular, "N");
     draw_centered_text_mut(&mut img, white, CENTER.0, CENTER.1 + (compass_radius + 10.0 * SCALE_FACTOR as f32) as i32, scale_text, &font_regular, "S");
-    draw_centered_text_mut(&mut img, white, CENTER.0 + (compass_radius + 10.0 * SCALE_FACTOR as f32) as i32, CENTER.1, scale_text, &font_regular, "L");
-    draw_centered_text_mut(&mut img, white, CENTER.0 - (compass_radius + 10.0 * SCALE_FACTOR as f32) as i32, CENTER.1, scale_text, &font_regular, "O");
+    draw_centered_text_mut(&mut img, white, CENTER.0 + (compass_radius + 10.0 * SCALE_FACTOR as f32) as i32, CENTER.1, scale_text, &font_regular, east_label);
+    draw_centered_text_mut(&mut img, white, CENTER.0 - (compass_radius + 10.0 * SCALE_FACTOR as f32) as i32, CENTER.1, scale_text, &font_regular, west_label);
+    // --- FIM DA ALTERAÇÃO ---
 
     let p_n = Point { x: CENTER.0, y: CENTER.1 - compass_radius as i32 };
     let p_s = Point { x: CENTER.0, y: CENTER.1 + (15 * SCALE_FACTOR as i32) };
@@ -122,7 +124,6 @@ pub fn generate_dot_image(path: &str, size: u32, color: Rgba<u8>) -> Result<(), 
     Ok(())
 }
 
-// --- INÍCIO DA ALTERAÇÃO: Nova função para desenhar linhas espessas ---
 fn draw_thick_line_segment_mut(
     image: &mut RgbaImage,
     start: (f32, f32),
@@ -150,7 +151,6 @@ fn draw_thick_line_segment_mut(
 
     draw_polygon_mut(image, &[p1, p2, p3, p4], color);
 }
-// --- FIM DA ALTERAÇÃO ---
 
 pub fn generate_track_map_image(
     gpx: &Gpx, 
@@ -159,7 +159,7 @@ pub fn generate_track_map_image(
     path: &str, 
     background_color: Rgba<u8>, 
     line_color: Rgba<u8>,
-    line_thickness: f32, // Parâmetro para a espessura
+    line_thickness: f32,
 ) -> Result<(), Box<dyn Error>> {
     let points: Vec<_> = gpx.tracks.iter()
         .flat_map(|t| t.segments.iter())
@@ -206,9 +206,7 @@ pub fn generate_track_map_image(
                 let (x1, y1) = get_pixel_coords(p1.x(), p1.y());
                 let (x2, y2) = get_pixel_coords(p2.x(), p2.y());
                 
-                // --- INÍCIO DA ALTERAÇÃO: Usar a nova função de linha espessa ---
                 draw_thick_line_segment_mut(&mut img, (x1, y1), (x2, y2), line_thickness, line_color);
-                // --- FIM DA ALTERAÇÃO ---
             }
         }
     }

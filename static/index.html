@@ -1,5 +1,6 @@
 <!DOCTYPE html>
-<html lang="pt-br">
+<!-- O lang será definido dinamicamente via JS -->
+<html lang="pt-BR">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -13,32 +14,37 @@
 </head>
 <body>
     <div id="app">
-        <h1>🎬 Sincronização Interativa GPX + Vídeo</h1>
-        <p class="intro-text">Carregue os seus ficheiros, selecione um ponto de sincronização no mapa e configure os overlays para gerar o seu vídeo final com telemetria.</p>
+        <div class="lang-switcher">
+            <button id="lang-pt" class="active">🇧🇷 PT-BR</button>
+            <button id="lang-en">🇺🇸 EN</button>
+        </div>
+
+        <h1 data-i18n="main_title">🎬 Sincronização Interativa GPX + Vídeo</h1>
+        <p class="intro-text" data-i18n="intro_text">Carregue os seus ficheiros, selecione um ponto de sincronização no mapa e configure os overlays para gerar o seu vídeo final com telemetria.</p>
         
         <div class="section">
             <div class="section-title">
                 <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>
-                <span class="step-number">1</span>Selecionar Ficheiros
+                <span class="step-number">1</span><span data-i18n="step1_title">Selecionar Ficheiros</span>
             </div>
             <div class="files-container">
                 <div class="file-group">
-                    <label class="file-group-label">Ficheiro GPX</label>
+                    <label class="file-group-label" data-i18n="gpx_file_label">Ficheiro GPX</label>
                     <label class="file-upload-label">
                         <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"></path></svg>
-                        Escolher GPX
+                        <span data-i18n="choose_gpx">Escolher GPX</span>
                         <input type="file" id="gpx-file" accept=".gpx">
                     </label>
-                    <span id="gpx-info" class="file-info">Nenhum ficheiro selecionado</span>
+                    <span id="gpx-info" class="file-info" data-i18n="no_gpx_selected">Nenhum ficheiro selecionado</span>
                 </div>
                 <div class="file-group">
-                    <label class="file-group-label">Ficheiro de Vídeo</label>
+                    <label class="file-group-label" data-i18n="video_file_label">Ficheiro de Vídeo</label>
                     <label class="file-upload-label">
                         <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="2" width="20" height="20" rx="2.18" ry="2.18"></rect><line x1="7" y1="2" x2="7" y2="22"></line><line x1="17" y1="2" x2="17" y2="22"></line><line x1="2" y1="12" x2="22" y2="12"></line><line x1="2" y1="7" x2="7" y2="7"></line><line x1="2" y1="17" x2="7" y2="17"></line><line x1="17" y1="17" x2="22" y2="17"></line><line x1="17" y1="7" x2="22" y2="7"></line></svg>
-                        Escolher Vídeo
+                        <span data-i18n="choose_video">Escolher Vídeo</span>
                         <input type="file" id="video-file" accept="video/*" disabled>
                     </label>
-                    <span id="video-info" class="file-info">Selecione um ficheiro GPX primeiro</span>
+                    <span id="video-info" class="file-info" data-i18n="select_gpx_first">Selecione um ficheiro GPX primeiro</span>
                 </div>
             </div>
             <div id="track-info" class="track-info"></div>
@@ -47,24 +53,22 @@
         <div class="section" id="map-section" style="display: none;">
             <div class="section-title">
                 <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path><circle cx="12" cy="10" r="3"></circle></svg>
-                <span class="step-number">2</span>Selecionar Ponto de Sincronização
+                <span class="step-number">2</span><span data-i18n="step2_title">Selecionar Ponto de Sincronização</span>
             </div>
             <div id="map"></div>
-            <div id="sync-point-info">🎯 Clique num ponto no mapa para o definir como o início da sincronização.</div>
+            <div id="sync-point-info" data-i18n="map_click_prompt">🎯 Clique num ponto no mapa para o definir como o início da sincronização.</div>
         </div>
 
-        <!-- INÍCIO DA ALTERAÇÃO GERAL -->
         <div id="position-section" class="section" style="display: none;">
             <div class="section-title">
                 <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"></path><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"></path></svg>
-                <span class="step-number">3</span>Posicionamento
+                <span class="step-number">3</span><span data-i18n="step3_title">Posicionamento</span>
             </div>
             <div class="overlays-config-container">
-                <!-- Controle do Velocímetro -->
                 <fieldset class="position-container">
                     <div class="overlay-toggle">
                         <input type="checkbox" id="add-speedo-overlay" name="addSpeedoOverlay" checked>
-                        <label for="add-speedo-overlay">⚙️ Velocímetro</label>
+                        <label for="add-speedo-overlay" data-i18n="speedo_label">⚙️ Velocímetro</label>
                     </div>
                     <div class="position-grid" id="speedo-position-grid">
                         <label class="position-grid-cell"><input type="radio" name="speedoPosition" value="top-left"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 20 L4 4 M12 4 L4 4 L4 12"/></svg></label>
@@ -73,11 +77,10 @@
                         <label class="position-grid-cell"><input type="radio" name="speedoPosition" value="bottom-right"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4 L20 20 M12 20 L20 20 L20 12"/></svg></label>
                     </div>
                 </fieldset>
-                <!-- Controle do Mapa do Trajeto -->
                 <fieldset class="position-container">
                     <div class="overlay-toggle">
                         <input type="checkbox" id="add-track-overlay" name="addTrackOverlay" checked>
-                        <label for="add-track-overlay">🗺️ Mapa do Trajeto</label>
+                        <label for="add-track-overlay" data-i18n="map_label">🗺️ Mapa do Trajeto</label>
                     </div>
                     <div class="position-grid" id="track-position-grid">
                         <label class="position-grid-cell"><input type="radio" name="trackPosition" value="top-left"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 20 L4 4 M12 4 L4 4 L4 12"/></svg></label>
@@ -88,16 +91,15 @@
                 </fieldset>
             </div>
         </div>
-        <!-- FIM DA ALTERAÇÃO GERAL -->
 
         <button id="generate-btn" style="display: none;">
             <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 2L11 13"></path><path d="M22 2L15 22 11 13 2 9 22 2z"></path></svg>
-            Confirmar e Gerar Vídeo
+            <span data-i18n="generate_button">Confirmar e Gerar Vídeo</span>
         </button>
         <div id="progress-container"><div id="progress-bar">0%</div></div>
-        <div id="status">Selecione um ficheiro GPX para começar.</div>
-        <div id="download-link"><a href="#">📥 Descarregar Vídeo Final</a></div>
-        <div id="logs-container"><h3>📋 Logs do Processamento:</h3><pre id="logs"></pre></div>
+        <div id="status" data-i18n="status_initial">Selecione um ficheiro GPX para começar.</div>
+        <div id="download-link"><a href="#" data-i18n="download_link">📥 Descarregar Vídeo Final</a></div>
+        <div id="logs-container"><h3><span data-i18n="logs_title">📋 Logs do Processamento:</span></h3><pre id="logs"></pre></div>
     </div>
 
     <script src="script.js" defer></script>

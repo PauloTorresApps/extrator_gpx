@@ -16,6 +16,65 @@ pub struct FrameInfo {
     gpx_point: Waypoint,
 }
 
+fn t(key: &str, lang: &str) -> String {
+    match lang {
+        "en" => match key {
+            "processing_complete" => "Processing completed successfully!".to_string(),
+            "error_occurred" => "An error occurred:".to_string(),
+            "reading_video_metadata" => "Reading video metadata:".to_string(),
+            "video_start_time" => "Video start (UTC):".to_string(),
+            "sync_point_selected" => "Selected GPX sync point (UTC):".to_string(),
+            "time_offset_calculated" => "Calculated time offset:".to_string(),
+            "reading_gpx" => "Reading GPX file:".to_string(),
+            "gpx_read_success" => "GPX file read successfully!".to_string(),
+            "interpolating_points" => "Interpolating GPX points...".to_string(),
+            "original_points" => "Original points in GPX:".to_string(),
+            "points_after_interpolation" => "Points after interpolation:".to_string(),
+            "added_points" => "added:".to_string(),
+            "interpolation_complete" => "GPX point interpolation complete!".to_string(),
+            "generating_track_image" => "Generating base track image...".to_string(),
+            "generating_marker_image" => "Generating marker image...".to_string(),
+            "map_assets_generated" => "Map assets generated.".to_string(),
+            "processing_gpx_points" => "Processing GPX points to generate frames...".to_string(),
+            "segment_processed" => "Segment processed:".to_string(),
+            "frame_generation_complete" => "Data frame generation complete:".to_string(),
+            "generating_final_video" => "Generating final video...".to_string(),
+            "final_video_success" => "Final video generated successfully!".to_string(),
+            "no_overlay_selected" => "No overlay was selected. Generating copy of the original video.".to_string(),
+            "no_gpx_match" => "No GPX points matched the video time. Generating copy of the original video.".to_string(),
+            "ffmpeg_failed" => "FFmpeg command failed. Filter:".to_string(),
+            _ => key.to_string(),
+        },
+        _ => match key { // Padrão para pt-BR
+            "processing_complete" => "Processo concluído com sucesso!".to_string(),
+            "error_occurred" => "Ocorreu um erro:".to_string(),
+            "reading_video_metadata" => "A ler metadados do vídeo:".to_string(),
+            "video_start_time" => "Início do vídeo (UTC):".to_string(),
+            "sync_point_selected" => "Ponto de sincronização GPX selecionado (UTC):".to_string(),
+            "time_offset_calculated" => "Desvio de tempo calculado:".to_string(),
+            "reading_gpx" => "A ler ficheiro GPX:".to_string(),
+            "gpx_read_success" => "Ficheiro GPX lido com sucesso!".to_string(),
+            "interpolating_points" => "A interpolar pontos GPX...".to_string(),
+            "original_points" => "Pontos originais no GPX:".to_string(),
+            "points_after_interpolation" => "Pontos após interpolação:".to_string(),
+            "added_points" => "adicionados:".to_string(),
+            "interpolation_complete" => "Interpolação de pontos GPX concluída!".to_string(),
+            "generating_track_image" => "A gerar imagem base do trajeto...".to_string(),
+            "generating_marker_image" => "A gerar imagem do marcador...".to_string(),
+            "map_assets_generated" => "Assets do mapa gerados.".to_string(),
+            "processing_gpx_points" => "A processar pontos GPX para gerar frames...".to_string(),
+            "segment_processed" => "Segmento processado:".to_string(),
+            "frame_generation_complete" => "Geração de frames de dados concluída:".to_string(),
+            "generating_final_video" => "A gerar o vídeo final...".to_string(),
+            "final_video_success" => "Vídeo final gerado com sucesso!".to_string(),
+            "no_overlay_selected" => "Nenhum overlay foi selecionado. A gerar cópia do vídeo original.".to_string(),
+            "no_gpx_match" => "Nenhum ponto GPX coincidiu com o tempo do vídeo. A gerar cópia do vídeo original.".to_string(),
+            "ffmpeg_failed" => "O comando FFmpeg falhou. Filtro:".to_string(),
+            _ => key.to_string(),
+        },
+    }
+}
+
 pub fn run_processing(
     gpx_path: PathBuf, 
     video_path: PathBuf, 
@@ -24,18 +83,19 @@ pub fn run_processing(
     speedo_position: String,
     add_track_overlay: bool,
     track_position: String,
+    lang: String,
 ) -> Result<Vec<String>, (String, Vec<String>)> {
     let mut logs = Vec::new();
     
-    match process_internal(gpx_path.clone(), video_path.clone(), &mut logs, sync_timestamp_str, add_speedo_overlay, speedo_position, add_track_overlay, track_position) {
+    match process_internal(gpx_path.clone(), video_path.clone(), &mut logs, sync_timestamp_str, add_speedo_overlay, speedo_position, add_track_overlay, track_position, &lang) {
         Ok(_) => {
-            logs.push("Processo concluído com sucesso!".to_string());
+            logs.push(t("processing_complete", &lang));
             cleanup_files(&gpx_path, &mut logs);
             Ok(logs)
         },
         Err(e) => {
             let error_message = e.to_string();
-            logs.push(format!("Ocorreu um erro: {}", error_message));
+            logs.push(format!("{} {}", t("error_occurred", &lang), error_message));
             cleanup_files(&gpx_path, &mut logs);
             Err((error_message, logs))
         }
@@ -51,6 +111,7 @@ fn process_internal(
     speedo_position: String,
     add_track_overlay: bool,
     track_position: String,
+    lang: &str,
 ) -> Result<(), Box<dyn Error>> {
     let output_dir = "output_frames";
     let final_video_dir = "output";
@@ -59,37 +120,39 @@ fn process_internal(
     fs::create_dir_all(final_video_dir)?;
     fs::create_dir_all(map_assets_dir)?;
 
-    logs.push(format!("A ler metadados do vídeo: {:?}", video_path));
-    let (video_start_time, video_end_time) = get_video_time_range(&video_path)?;
-    logs.push(format!("Início do vídeo (UTC): {}", video_start_time));
+    logs.push(format!("{} {:?}", t("reading_video_metadata", lang), video_path));
+    let (video_start_time, video_end_time) = get_video_time_range(&video_path, lang)?;
+    logs.push(format!("{} {}", t("video_start_time", lang), video_start_time));
     
     let selected_gpx_time = sync_timestamp_str.parse::<DateTime<Utc>>()?;
-    logs.push(format!("Ponto de sincronização GPX selecionado (UTC): {}", selected_gpx_time));
+    logs.push(format!("{} {}", t("sync_point_selected", lang), selected_gpx_time));
     
     let time_offset = selected_gpx_time - video_start_time;
-    logs.push(format!("Desvio de tempo calculado: {} segundos.", time_offset.num_seconds()));
+    logs.push(format!("{} {} segundos.", t("time_offset_calculated", lang), time_offset.num_seconds()));
 
-    logs.push(format!("A ler ficheiro GPX: {:?}", gpx_path));
+    logs.push(format!("{} {:?}", t("reading_gpx", lang), gpx_path));
     let original_gpx: Gpx = read(BufReader::new(File::open(&gpx_path)?))?;
-    logs.push("Ficheiro GPX lido com sucesso!".to_string());
+    logs.push(t("gpx_read_success", lang));
     
     let gpx = interpolate_gpx_points(original_gpx, 1);
     
     let map_image_path = format!("{}/track_base.png", map_assets_dir);
     let dot_image_path = format!("{}/marker_dot.png", map_assets_dir);
     if add_track_overlay {
-        logs.push("A gerar imagem base do trajeto...".to_string());
+        logs.push(t("generating_track_image", lang));
         generate_track_map_image(&gpx, 300, 300, &map_image_path, Rgba([0, 0, 0, 100]), Rgba([57, 255, 20, 255]), 2.0)?;
         generate_dot_image(&dot_image_path, 8, Rgba([255, 0, 0, 255]))?;
-        logs.push("Assets do mapa gerados.".to_string());
+        logs.push(t("map_assets_generated", lang));
     }
     
     let mut frame_infos: Vec<FrameInfo> = Vec::new();
     if add_speedo_overlay || add_track_overlay {
-        logs.push("A processar pontos GPX para gerar frames...".to_string());
+        logs.push(t("processing_gpx_points", lang));
         let mut frame_counter = 0;
+        // --- INÍCIO DA CORREÇÃO: Remover variáveis não utilizadas ---
         for track in gpx.tracks.iter() {
             for segment in track.segments.iter() {
+        // --- FIM DA CORREÇÃO ---
                 let all_points = &segment.points;
                 if all_points.len() < 3 { continue; }
 
@@ -107,7 +170,7 @@ fn process_internal(
                                     let bearing = calculate_bearing(p1, p2);
                                     let elevation = p2.elevation.unwrap_or(0.0);
                                     let path = format!("{}/frame_{:05}.png", output_dir, frame_counter);
-                                    generate_speedometer_image(speed_kmh, bearing, g_force, elevation, &path)?;
+                                    generate_speedometer_image(speed_kmh, bearing, g_force, elevation, &path, lang)?;
                                     frame_counter += 1;
                                     path
                                 } else {
@@ -125,15 +188,15 @@ fn process_internal(
     }
 
     if !frame_infos.is_empty() {
-        logs.push(format!("Geração de {} frames de dados concluída!", frame_infos.len()));
-        logs.push("A gerar o vídeo final...".to_string());
-        generate_final_video(&video_path, &frame_infos, add_speedo_overlay, &speedo_position, add_track_overlay, &track_position, &gpx, &map_image_path, &dot_image_path)?;
-        logs.push("Vídeo final gerado com sucesso!".to_string());
+        logs.push(format!("{} {}", t("frame_generation_complete", lang), frame_infos.len()));
+        logs.push(t("generating_final_video", lang));
+        generate_final_video(&video_path, &frame_infos, add_speedo_overlay, &speedo_position, add_track_overlay, &track_position, &gpx, &map_image_path, &dot_image_path, lang)?;
+        logs.push(t("final_video_success", lang));
     } else if !add_speedo_overlay && !add_track_overlay {
-        logs.push("Nenhum overlay foi selecionado. A gerar cópia do vídeo original.".to_string());
+        logs.push(t("no_overlay_selected", lang));
         fs::copy(video_path, "output/output_video.mp4")?;
     } else {
-        logs.push("Nenhum ponto GPX coincidiu com o tempo do vídeo. A gerar cópia do vídeo original.".to_string());
+        logs.push(t("no_gpx_match", lang));
         fs::copy(video_path, "output/output_video.mp4")?;
     }
 
@@ -159,6 +222,7 @@ fn generate_final_video(
     gpx: &Gpx,
     map_image_path: &str,
     dot_image_path: &str,
+    lang: &str,
 ) -> Result<(), Box<dyn Error>> {
     if frame_infos.is_empty() { return Ok(()); }
 
@@ -205,8 +269,6 @@ fn generate_final_video(
             ((map_width - 2.0 * padding) / lon_range).min((map_height - 2.0 * padding) / lat_range)
         } else { 0.0 };
         
-        // --- INÍCIO DA CORREÇÃO: Lógica de posicionamento do marcador ---
-        // Substitui 'overlay_w' e 'overlay_h' pelas dimensões fixas do mapa (300)
         let map_base_coords = map_coords.replace("overlay_w", "300").replace("overlay_h", "300");
         let map_coords_parts: Vec<&str> = map_base_coords.split(':').collect();
         let map_base_x = map_coords_parts.get(0).cloned().unwrap_or("0");
@@ -219,7 +281,6 @@ fn generate_final_video(
             let dot_x_on_map = padding + (lon - min_lon) * scale - 4.0;
             let dot_y_on_map = padding + (max_lat - lat) * scale - 4.0;
             
-            // Envolve as expressões base em parênteses para garantir a ordem correta de operações no FFmpeg
             let final_dot_x = format!("({}) + {:.2}", map_base_x, dot_x_on_map);
             let final_dot_y = format!("({}) + {:.2}", map_base_y, dot_y_on_map);
             
@@ -229,7 +290,6 @@ fn generate_final_video(
             complex_filter.push_str(&format!(";{}[{}:v]overlay=x='{}':y='{}':enable='between(t,{},{})'{}", last_stream, dot_input_idx, final_dot_x, final_dot_y, info.timestamp_sec, end_time, output_stream));
             last_stream = output_stream;
         }
-        // --- FIM DA CORREÇÃO ---
     }
     
     let final_filter = complex_filter.strip_prefix(';').unwrap_or(&complex_filter).to_string();
@@ -237,7 +297,7 @@ fn generate_final_video(
     if Path::new(output_file).exists() { fs::remove_file(output_file)?; }
 
     let status = StdCommand::new("ffmpeg").args(&inputs).arg("-filter_complex").arg(&final_filter).arg("-map").arg(&last_stream).arg("-c:a").arg("copy").arg(output_file).status()?;
-    if !status.success() { return Err(format!("O comando FFmpeg falhou. Filtro: {}", final_filter).into()); }
+    if !status.success() { return Err(format!("{} {}", t("ffmpeg_failed", lang), final_filter).into()); }
     Ok(())
 }
 

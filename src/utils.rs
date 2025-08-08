@@ -7,13 +7,18 @@ use chrono_tz::America::Sao_Paulo;
 use gpx::{Gpx, Waypoint, Track, TrackSegment};
 use geo_types::Point;
 
-pub fn get_video_time_range(video_path: &Path) -> Result<(DateTime<Utc>, DateTime<Utc>), Box<dyn Error>> {
+pub fn get_video_time_range(video_path: &Path, lang: &str) -> Result<(DateTime<Utc>, DateTime<Utc>), Box<dyn Error>> {
     let metadata = ffprobe::ffprobe(video_path).map_err(|e| {
         let error_message = e.to_string();
         if error_message.contains("No such file or directory") || error_message.contains("not found") {
-            Box::<dyn Error>::from("Comando 'ffprobe' não encontrado. Verifique se o FFmpeg está instalado e no PATH do sistema.")
+            let msg = if lang == "en" {
+                "Command 'ffprobe' not found. Make sure FFmpeg is installed and in the system's PATH."
+            } else {
+                "Comando 'ffprobe' não encontrado. Verifique se o FFmpeg está instalado e no PATH do sistema."
+            };
+            Box::<dyn Error>::from(msg)
         } else {
-            Box::<dyn Error>::from(format!("Erro ao executar o ffprobe: {}", error_message))
+            Box::<dyn Error>::from(format!("Error executing ffprobe: {}", error_message))
         }
     })?;
 
@@ -22,14 +27,22 @@ pub fn get_video_time_range(video_path: &Path) -> Result<(DateTime<Utc>, DateTim
         .find(|s| s.codec_type == Some("video".to_string()))
         .and_then(|s| s.tags.as_ref())
         .and_then(|t| t.creation_time.as_deref())
-        .ok_or("Tag 'creation_time' não encontrada no stream de vídeo.")?;
+        .ok_or(if lang == "en" {
+            "Tag 'creation_time' not found in the video stream."
+        } else {
+            "Tag 'creation_time' não encontrada no stream de vídeo."
+        })?;
         
     let naive_datetime_from_video = DateTime::parse_from_rfc3339(creation_time_str)?.naive_utc();
     let local_datetime = Sao_Paulo.from_local_datetime(&naive_datetime_from_video).single()
-        .ok_or("Não foi possível converter a hora local para o fuso de Brasília.")?;
+        .ok_or(if lang == "en" {
+            "Could not convert local time for the São Paulo timezone."
+        } else {
+            "Não foi possível converter a hora local para o fuso de São Paulo."
+        })?;
     let start_time_utc = local_datetime.with_timezone(&Utc);
 
-    let duration_str = metadata.format.duration.ok_or("Duração não encontrada.")?;
+    let duration_str = metadata.format.duration.ok_or(if lang == "en" { "Duration not found." } else { "Duração não encontrada." })?;
     let duration_secs = duration_str.parse::<f64>()?;
     let duration = Duration::microseconds((duration_secs * 1_000_000.0) as i64);
     
@@ -114,10 +127,6 @@ pub fn calculate_bearing(p1: &Waypoint, p2: &Waypoint) -> f64 {
     
     (initial_bearing_deg + 360.0) % 360.0
 }
-
-// --- INÍCIO DA ALTERAÇÃO: Função `find_closest_gpx_point` removida ---
-// A função não é mais necessária pois a lógica de sugestão mudou.
-// --- FIM DA ALTERAÇÃO ---
 
 fn interpolate_points(p1: &Waypoint, p2: &Waypoint, max_interval_secs: i64) -> Vec<Waypoint> {
     let mut interpolated_points = Vec::new();
