@@ -1,5 +1,4 @@
 <!DOCTYPE html>
-<!-- O lang será definido dinamicamente via JS -->
 <html lang="pt-BR">
 <head>
     <meta charset="UTF-8">
@@ -14,6 +13,27 @@
 </head>
 <body>
     <div id="app">
+        <!-- INÍCIO DA ALTERAÇÃO: Ícone de Configurações e Modal -->
+        <button id="settings-btn" class="settings-btn" aria-label="Abrir configurações">
+            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
+        </button>
+
+        <div id="settings-modal" class="modal-overlay hidden">
+            <div class="modal-content">
+                <button id="close-modal-btn" class="close-modal-btn">&times;</button>
+                <h2 data-i18n="settings_title">Configurações Avançadas</h2>
+                <div class="setting-item">
+                    <label for="interpolation-slider" data-i18n="interpolation_label">Nível de Precisão da Interpolação</label>
+                    <p data-i18n="interpolation_desc">Menor valor = mais pontos = maior precisão e processamento mais lento.</p>
+                    <div class="slider-container">
+                        <input type="range" id="interpolation-slider" min="1" max="5" value="1" step="1">
+                        <span id="interpolation-value">1s</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <!-- FIM DA ALTERAÇÃO -->
+
         <div class="lang-switcher">
             <button id="lang-pt" class="active">🇧🇷 PT-BR</button>
             <button id="lang-en">🇺🇸 EN</button>

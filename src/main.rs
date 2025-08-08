@@ -75,10 +75,14 @@ struct ProcessParams {
     add_track_overlay: bool,
     track_position: Option<String>,
     lang: String,
+    interpolation_level: i64,
 }
 
 async fn process_files(mut multipart: Multipart) -> impl IntoResponse {
-    let mut params = ProcessParams::default();
+    let mut params = ProcessParams {
+        interpolation_level: 1,
+        ..Default::default()
+    };
 
     let upload_dir = PathBuf::from("uploads");
     tokio::fs::create_dir_all(&upload_dir).await.unwrap();
@@ -110,11 +114,13 @@ async fn process_files(mut multipart: Multipart) -> impl IntoResponse {
                 "addTrackOverlay" => params.add_track_overlay = value.parse().unwrap_or(false),
                 "trackPosition" => params.track_position = Some(value),
                 "lang" => params.lang = value,
+                "interpolationLevel" => params.interpolation_level = value.parse().unwrap_or(1),
                 _ => {}
             }
         }
     }
 
+    // --- INÍCIO DA CORREÇÃO: Removido o bloco de código duplicado ---
     if let (Some(gpx), Some(video), Some(timestamp)) = (params.gpx_path, params.video_path, params.sync_timestamp) {
         let result = tokio::task::spawn_blocking(move || {
             processing::run_processing(
@@ -126,6 +132,7 @@ async fn process_files(mut multipart: Multipart) -> impl IntoResponse {
                 params.add_track_overlay,
                 params.track_position.unwrap_or_default(),
                 params.lang,
+                params.interpolation_level,
             )
         }).await.unwrap();
 
@@ -156,79 +163,60 @@ async fn process_files(mut multipart: Multipart) -> impl IntoResponse {
         };
         (StatusCode::BAD_REQUEST, Json(response))
     }
+    // --- FIM DA CORREÇÃO ---
 }
 
 async fn suggest_sync_point(mut multipart: Multipart) -> impl IntoResponse {
     let mut gpx_path: Option<PathBuf> = None;
     let mut video_path: Option<PathBuf> = None;
+    let mut interpolation_level: i64 = 1;
 
     let upload_dir = PathBuf::from("uploads_temp_suggest");
-    if let Err(e) = tokio::fs::create_dir_all(&upload_dir).await {
-        let error_message = format!("Não foi possível criar diretório temporário: {}", e);
-        return (StatusCode::INTERNAL_SERVER_ERROR, Json(SuggestionResponse { 
-            message: error_message,
-            latitude: None, longitude: None, timestamp: None, interpolated_points: None
-        }));
-    }
+    tokio::fs::create_dir_all(&upload_dir).await.unwrap();
 
+    // --- INÍCIO DA CORREÇÃO: Refatoração do loop para evitar erro de empréstimo ---
     while let Some(field) = multipart.next_field().await.unwrap() {
-        if let Some(file_name) = field.file_name() {
-            let name = field.name().unwrap_or("").to_string();
-            let file_name = file_name.to_string();
+        let name = field.name().unwrap_or("").to_string();
+        // Clona o nome do ficheiro para uma String, terminando o empréstimo de `field`
+        let file_name = field.file_name().map(|s| s.to_string());
+
+        if let Some(file_name_str) = file_name {
             let data = field.bytes().await.unwrap();
             let unique_id = Uuid::new_v4();
-            let path = upload_dir.join(format!("{}-{}", unique_id, file_name));
+            let path = upload_dir.join(format!("{}-{}", unique_id, file_name_str));
             tokio::fs::write(&path, &data).await.unwrap();
             
             if name == "gpxFile" { gpx_path = Some(path); }
             else if name == "videoFile" { video_path = Some(path); }
+        } else {
+            let data = field.bytes().await.unwrap();
+            let value = String::from_utf8(data.to_vec()).unwrap();
+            if name == "interpolationLevel" {
+                interpolation_level = value.parse().unwrap_or(1);
+            }
         }
     }
+    // --- FIM DA CORREÇÃO ---
 
     let response = if let (Some(gpx_p), Some(video_p)) = (gpx_path, video_path) {
         match utils::get_video_time_range(&video_p, "en") {
             Ok((video_start_time, _)) => {
                 match gpx::read(std::io::BufReader::new(std::fs::File::open(&gpx_p).unwrap())) {
                     Ok(gpx_data) => {
-                        let interpolated_gpx = utils::interpolate_gpx_points(gpx_data, 1);
+                        let interpolated_gpx = utils::interpolate_gpx_points(gpx_data, interpolation_level);
                         
                         let first_point_after = interpolated_gpx
-                            .tracks
-                            .iter()
-                            .flat_map(|track| track.segments.iter())
-                            .flat_map(|segment| segment.points.iter())
-                            .find(|point| {
-                                if let Some(time_str) = point.time.as_ref().and_then(|t| t.format().ok()) {
-                                    if let Ok(point_time) = time_str.parse::<DateTime<chrono::Utc>>() {
-                                        return point_time > video_start_time;
-                                    }
-                                }
-                                false
-                            });
+                            .tracks.iter().flat_map(|t| t.segments.iter()).flat_map(|s| s.points.iter())
+                            .find(|p| p.time.and_then(|t| t.format().ok()).and_then(|ts| ts.parse::<DateTime<chrono::Utc>>().ok()).map_or(false, |pt| pt > video_start_time));
 
-                        let points_for_json: Vec<PointJson> = interpolated_gpx.tracks.iter()
-                            .flat_map(|t| t.segments.iter())
-                            .flat_map(|s| s.points.iter())
-                            .map(|p| PointJson { 
-                                lat: p.point().y(), 
-                                lon: p.point().x(),
-                                time: p.time.and_then(|t| t.format().ok())
-                            })
-                            .collect();
+                        let points_for_json: Vec<PointJson> = interpolated_gpx.tracks.iter().flat_map(|t| t.segments.iter()).flat_map(|s| s.points.iter()).map(|p| PointJson { lat: p.point().y(), lon: p.point().x(), time: p.time.and_then(|t| t.format().ok()) }).collect();
 
                         if let Some(point) = first_point_after {
                             let point_coords = point.point();
                             let timestamp_str = point.time.and_then(|t| t.format().ok()).unwrap();
-
-                            Json(SuggestionResponse {
-                                message: "Sync point suggested and track interpolated.".to_string(),
-                                latitude: Some(point_coords.y()),
-                                longitude: Some(point_coords.x()),
-                                timestamp: Some(timestamp_str),
-                                interpolated_points: Some(points_for_json),
-                            })
+                            Json(SuggestionResponse { message: "Sync point suggested.".to_string(), latitude: Some(point_coords.y()), longitude: Some(point_coords.x()), timestamp: Some(timestamp_str), interpolated_points: Some(points_for_json) })
                         } else {
-                            Json(SuggestionResponse { message: "No GPX point found after video start time.".to_string(), latitude: None, longitude: None, timestamp: None, interpolated_points: Some(points_for_json) })
+                            Json(SuggestionResponse { message: "No GPX point found after video start.".to_string(), latitude: None, longitude: None, timestamp: None, interpolated_points: Some(points_for_json) })
                         }
                     },
                     Err(_) => Json(SuggestionResponse { message: "Error reading GPX file.".to_string(), latitude: None, longitude: None, timestamp: None, interpolated_points: None }),

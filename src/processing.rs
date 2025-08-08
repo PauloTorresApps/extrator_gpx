@@ -17,6 +17,7 @@ pub struct FrameInfo {
 }
 
 fn t(key: &str, lang: &str) -> String {
+    // Função de tradução (sem alterações)
     match lang {
         "en" => match key {
             "processing_complete" => "Processing completed successfully!".to_string(),
@@ -84,10 +85,11 @@ pub fn run_processing(
     add_track_overlay: bool,
     track_position: String,
     lang: String,
+    interpolation_level: i64, // Novo parâmetro
 ) -> Result<Vec<String>, (String, Vec<String>)> {
     let mut logs = Vec::new();
     
-    match process_internal(gpx_path.clone(), video_path.clone(), &mut logs, sync_timestamp_str, add_speedo_overlay, speedo_position, add_track_overlay, track_position, &lang) {
+    match process_internal(gpx_path.clone(), video_path.clone(), &mut logs, sync_timestamp_str, add_speedo_overlay, speedo_position, add_track_overlay, track_position, &lang, interpolation_level) {
         Ok(_) => {
             logs.push(t("processing_complete", &lang));
             cleanup_files(&gpx_path, &mut logs);
@@ -112,6 +114,7 @@ fn process_internal(
     add_track_overlay: bool,
     track_position: String,
     lang: &str,
+    interpolation_level: i64, // Novo parâmetro
 ) -> Result<(), Box<dyn Error>> {
     let output_dir = "output_frames";
     let final_video_dir = "output";
@@ -134,7 +137,10 @@ fn process_internal(
     let original_gpx: Gpx = read(BufReader::new(File::open(&gpx_path)?))?;
     logs.push(t("gpx_read_success", lang));
     
-    let gpx = interpolate_gpx_points(original_gpx, 1);
+    // --- INÍCIO DA ALTERAÇÃO: Usar o nível de interpolação do modal ---
+    logs.push(t("interpolating_points", lang));
+    let gpx = interpolate_gpx_points(original_gpx, interpolation_level);
+    // --- FIM DA ALTERAÇÃO ---
     
     let map_image_path = format!("{}/track_base.png", map_assets_dir);
     let dot_image_path = format!("{}/marker_dot.png", map_assets_dir);
@@ -147,12 +153,23 @@ fn process_internal(
     
     let mut frame_infos: Vec<FrameInfo> = Vec::new();
     if add_speedo_overlay || add_track_overlay {
+        // ... (o resto da função permanece igual)
+    }
+
+    if !frame_infos.is_empty() {
+        // ...
+    } else if !add_speedo_overlay && !add_track_overlay {
+        // ...
+    } else {
+        // ...
+    }
+
+    // O resto da função permanece igual
+    if add_speedo_overlay || add_track_overlay {
         logs.push(t("processing_gpx_points", lang));
         let mut frame_counter = 0;
-        // --- INÍCIO DA CORREÇÃO: Remover variáveis não utilizadas ---
         for track in gpx.tracks.iter() {
             for segment in track.segments.iter() {
-        // --- FIM DA CORREÇÃO ---
                 let all_points = &segment.points;
                 if all_points.len() < 3 { continue; }
 
@@ -296,7 +313,23 @@ fn generate_final_video(
     let output_file = "output/output_video.mp4";
     if Path::new(output_file).exists() { fs::remove_file(output_file)?; }
 
-    let status = StdCommand::new("ffmpeg").args(&inputs).arg("-filter_complex").arg(&final_filter).arg("-map").arg(&last_stream).arg("-c:a").arg("copy").arg(output_file).status()?;
+    let status = StdCommand::new("ffmpeg")
+        .args(&inputs)
+        .arg("-filter_complex")
+        .arg(&final_filter)
+        .arg("-map")
+        .arg(&last_stream)
+        .arg("-map")
+        .arg("0:a?")
+        .arg("-c:a")
+        .arg("copy")
+        .arg("-map_metadata")
+        .arg("0")
+        .arg("-movflags")
+        .arg("use_metadata_tags")
+        .arg(output_file)
+        .status()?;
+        
     if !status.success() { return Err(format!("{} {}", t("ffmpeg_failed", lang), final_filter).into()); }
     Ok(())
 }
