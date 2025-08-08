@@ -5,36 +5,40 @@ mod processing;
 mod utils;
 
 use axum::{
-    extract::{DefaultBodyLimit, Multipart},
+    extract::{DefaultBodyLimit, Multipart, State},
     http::StatusCode,
     response::{IntoResponse, Json},
     routing::post,
     Router,
 };
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use std::net::SocketAddr;
 use std::path::PathBuf;
 use tower_http::services::ServeDir;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 use uuid::Uuid;
 use chrono::DateTime;
+use std::collections::HashMap;
+use std::sync::Arc;
+use reqwest::Client;
 
 #[tokio::main]
 async fn main() {
     tracing_subscriber::registry()
-        .with(
-            tracing_subscriber::EnvFilter::try_from_default_env()
-                .unwrap_or_else(|_| "extrator_gpx=debug".into()),
-        )
+        .with(tracing_subscriber::EnvFilter::try_from_default_env().unwrap_or_else(|_| "extrator_gpx=debug".into()))
         .with(tracing_subscriber::fmt::layer())
         .init();
+
+    let client = Arc::new(Client::new());
 
     let app = Router::new()
         .route("/process", post(process_files))
         .route("/suggest", post(suggest_sync_point))
+        .route("/terrain", post(get_terrain_data))
+        .with_state(client)
         .nest_service("/", ServeDir::new("static"))
         .nest_service("/output", ServeDir::new("output"))
-        .layer(DefaultBodyLimit::max((1024 * 1024 * 1024)*2)); // 2 GB
+        .layer(DefaultBodyLimit::max((1024 * 1024 * 1024)*2));
 
     let addr = SocketAddr::from(([127, 0, 0, 1], 3030));
     tracing::debug!("A escutar em {}", addr);
@@ -76,6 +80,29 @@ struct ProcessParams {
     track_position: Option<String>,
     lang: String,
     interpolation_level: i64,
+}
+
+#[derive(Deserialize)]
+struct TerrainRequestPoint {
+    lat: f64,
+    lon: f64,
+    time: String,
+}
+
+#[derive(Deserialize)]
+struct TerrainRequest {
+    points: Vec<TerrainRequestPoint>,
+    lang: String,
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+struct OverpassElement {
+    tags: HashMap<String, String>,
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+struct OverpassResponse {
+    elements: Vec<OverpassElement>,
 }
 
 async fn process_files(mut multipart: Multipart) -> impl IntoResponse {
@@ -120,7 +147,7 @@ async fn process_files(mut multipart: Multipart) -> impl IntoResponse {
         }
     }
 
-    // --- INÍCIO DA CORREÇÃO: Removido o bloco de código duplicado ---
+    // --- INÍCIO DA CORREÇÃO: Removido bloco de código duplicado ---
     if let (Some(gpx), Some(video), Some(timestamp)) = (params.gpx_path, params.video_path, params.sync_timestamp) {
         let result = tokio::task::spawn_blocking(move || {
             processing::run_processing(
@@ -174,10 +201,9 @@ async fn suggest_sync_point(mut multipart: Multipart) -> impl IntoResponse {
     let upload_dir = PathBuf::from("uploads_temp_suggest");
     tokio::fs::create_dir_all(&upload_dir).await.unwrap();
 
-    // --- INÍCIO DA CORREÇÃO: Refatoração do loop para evitar erro de empréstimo ---
+    // --- INÍCIO DA CORREÇÃO: Refatorado para evitar erro de empréstimo ---
     while let Some(field) = multipart.next_field().await.unwrap() {
         let name = field.name().unwrap_or("").to_string();
-        // Clona o nome do ficheiro para uma String, terminando o empréstimo de `field`
         let file_name = field.file_name().map(|s| s.to_string());
 
         if let Some(file_name_str) = file_name {
@@ -230,4 +256,52 @@ async fn suggest_sync_point(mut multipart: Multipart) -> impl IntoResponse {
     
     let _ = tokio::fs::remove_dir_all(&upload_dir).await;
     (StatusCode::OK, response)
+}
+
+async fn get_terrain_data(
+    State(client): State<Arc<Client>>,
+    Json(payload): Json<TerrainRequest>,
+) -> impl IntoResponse {
+    let mut terrain_map = HashMap::new();
+
+    for point in payload.points {
+        let query = format!(
+            "[out:json];(way(around:10,{},{});node(around:10,{},{});relation(around:10,{},{}););out tags;",
+            point.lat, point.lon, point.lat, point.lon, point.lat, point.lon
+        );
+
+        let response = client
+            .post("https://overpass-api.de/api/interpreter")
+            .body(query)
+            .send()
+            .await;
+
+        let mut terrain_type = "unknown".to_string();
+
+        if let Ok(res) = response {
+            if let Ok(data) = res.json::<OverpassResponse>().await {
+                if let Some(element) = data.elements.first() {
+                    if let Some(landuse) = element.tags.get("landuse") {
+                        terrain_type = landuse.clone();
+                    } else if let Some(natural) = element.tags.get("natural") {
+                        terrain_type = natural.clone();
+                    } else if let Some(waterway) = element.tags.get("waterway") {
+                        terrain_type = waterway.clone();
+                    }
+                }
+            }
+        }
+        
+        let translated_terrain = match terrain_type.as_str() {
+            "forest" => if payload.lang == "en" { "Forest" } else { "Floresta" },
+            "residential" | "urban" => if payload.lang == "en" { "Urban Area" } else { "Área Urbana" },
+            "farmland" | "farmyard" | "grass" => if payload.lang == "en" { "Rural Area" } else { "Área Rural" },
+            "water" | "river" | "riverbank" => if payload.lang == "en" { "Water Body" } else { "Corpo de Água" },
+            _ => if payload.lang == "en" { "Unknown" } else { "Desconhecido" },
+        };
+
+        terrain_map.insert(point.time, translated_terrain.to_string());
+    }
+
+    (StatusCode::OK, Json(terrain_map))
 }

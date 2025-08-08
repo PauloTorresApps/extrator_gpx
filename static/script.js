@@ -1,4 +1,4 @@
-// --- Seção de Tradução (sem alterações) ---
+// --- Seção de Tradução ---
 const translations = {
     'en': {
         'main_title': '🎬 Interactive GPX + Video Sync',
@@ -10,7 +10,8 @@ const translations = {
         'suggestion_applied': 'Automatic suggestion applied! You can adjust it on the map if needed.', 'suggestion_error': 'Could not get suggestion: {{message}}. Please select a point manually.', 'suggestion_comm_error': 'Communication error while getting suggestion. Please select a point manually.',
         'sync_point_selected': 'Point selected ({{type}}): {{time}} (UTC)', 'manual_type': 'manual', 'suggestion_type': 'suggestion', 'error_missing_files': 'Error: Please select both files and a sync point.',
         'uploading_files': 'Uploading files...', 'success_message': 'Success! Your video is ready.', 'server_error': 'Error: {{message}}', 'network_error': 'Network error while uploading files.',
-        'settings_title': 'Advanced Settings', 'interpolation_label': 'Interpolation Precision Level', 'interpolation_desc': 'Lower value = more points = higher precision and slower processing.'
+        'settings_title': 'Advanced Settings', 'interpolation_label': 'Interpolation Precision Level', 'interpolation_desc': 'Lower value = more points = higher precision and slower processing.',
+        'terrain_label': '🏞️ Display Terrain Type', 'terrain_desc': 'Shows the terrain type (e.g., forest, urban) on a corner of the screen. Requires an internet connection.', 'fetching_terrain': 'Fetching terrain data...', 'unknown_terrain': 'Unknown Terrain'
     },
     'pt-BR': {
         'main_title': '🎬 Sincronização Interativa GPX + Vídeo',
@@ -22,7 +23,8 @@ const translations = {
         'suggestion_applied': 'Sugestão automática aplicada! Pode ajustar no mapa se necessário.', 'suggestion_error': 'Não foi possível obter sugestão: {{message}}. Selecione um ponto manualmente.', 'suggestion_comm_error': 'Erro de comunicação ao obter sugestão. Selecione um ponto manualmente.',
         'sync_point_selected': 'Ponto selecionado ({{type}}): {{time}} (UTC)', 'manual_type': 'manual', 'suggestion_type': 'sugestão', 'error_missing_files': 'Erro: Por favor, selecione os dois ficheiros e um ponto de sincronização.',
         'uploading_files': 'A enviar ficheiros...', 'success_message': 'Sucesso! O seu vídeo está pronto.', 'server_error': 'Erro: {{message}}', 'network_error': 'Erro de rede ao enviar os ficheiros.',
-        'settings_title': 'Configurações Avançadas', 'interpolation_label': 'Nível de Precisão da Interpolação', 'interpolation_desc': 'Menor valor = mais pontos = maior precisão e processamento mais lento.'
+        'settings_title': 'Configurações Avançadas', 'interpolation_label': 'Nível de Precisão da Interpolação', 'interpolation_desc': 'Menor valor = mais pontos = maior precisão e processamento mais lento.',
+        'terrain_label': '🏞️ Exibir Tipo de Terreno', 'terrain_desc': 'Exibe o tipo de terreno (ex: floresta, urbano) num canto do ecrã. Requer ligação à internet.', 'fetching_terrain': 'A obter dados do terreno...', 'unknown_terrain': 'Terreno Desconhecido'
     }
 };
 let currentLang = localStorage.getItem('lang') || 'pt-BR';
@@ -31,16 +33,18 @@ function setLanguage(lang) {
     currentLang = lang;
     localStorage.setItem('lang', lang);
     document.documentElement.lang = lang.startsWith('en') ? 'en' : 'pt-BR';
+    
     document.querySelectorAll('[data-i18n]').forEach(el => {
         const key = el.getAttribute('data-i18n');
         const hasChildElements = el.children.length > 0 && Array.from(el.children).some(child => child.nodeType === 1);
         if (hasChildElements) {
             const textNode = Array.from(el.childNodes).find(node => node.nodeType === Node.TEXT_NODE && node.textContent.trim().length > 0);
-            if(textNode) textNode.textContent = t(key);
+            if(textNode) textNode.textContent = ` ${t(key)}`;
         } else {
             el.textContent = t(key);
         }
     });
+
     document.getElementById('lang-pt').classList.toggle('active', lang === 'pt-BR');
     document.getElementById('lang-en').classList.toggle('active', lang === 'en');
 }
@@ -69,23 +73,21 @@ const speedoPositionGrid = document.getElementById('speedo-position-grid');
 const trackPositionGrid = document.getElementById('track-position-grid');
 const speedoPositionRadios = document.querySelectorAll('input[name="speedoPosition"]');
 const trackPositionRadios = document.querySelectorAll('input[name="trackPosition"]');
-
-// --- INÍCIO DA ALTERAÇÃO: Seletores para o Modal ---
 const settingsBtn = document.getElementById('settings-btn');
 const settingsModal = document.getElementById('settings-modal');
 const closeModalBtn = document.getElementById('close-modal-btn');
 const interpolationSlider = document.getElementById('interpolation-slider');
 const interpolationValue = document.getElementById('interpolation-value');
-// --- FIM DA ALTERAÇÃO ---
+const terrainCheckbox = document.getElementById('add-terrain-overlay');
+const terrainDisplay = document.getElementById('terrain-display');
 
 // Variáveis de estado
 let gpxFile = null, videoFile = null, selectedSyncPoint = null, map = null, trackLayer = null, userMarker = null, suggestionMarker = null, gpxDataPoints = [];
+let terrainData = {};
 
-// Inicialização do mapa
+// Inicialização e Event Listeners
 map = L.map('map').setView([0, 0], 2);
 L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors' }).addTo(map);
-
-// Event Listeners
 gpxInput.addEventListener('change', handleGpxUpload);
 videoInput.addEventListener('change', handleVideoUpload);
 generateBtn.addEventListener('click', handleGenerate);
@@ -95,13 +97,21 @@ speedoPositionRadios.forEach(radio => radio.addEventListener('change', updatePos
 trackPositionRadios.forEach(radio => radio.addEventListener('change', updatePositionControls));
 document.getElementById('lang-pt').addEventListener('click', () => setLanguage('pt-BR'));
 document.getElementById('lang-en').addEventListener('click', () => setLanguage('en'));
-
-// --- INÍCIO DA ALTERAÇÃO: Event Listeners do Modal ---
 settingsBtn.addEventListener('click', () => settingsModal.classList.remove('hidden'));
 closeModalBtn.addEventListener('click', () => settingsModal.classList.add('hidden'));
 settingsModal.addEventListener('click', (e) => { if (e.target === settingsModal) { settingsModal.classList.add('hidden'); } });
 interpolationSlider.addEventListener('input', () => { interpolationValue.textContent = `${interpolationSlider.value}s`; });
-// --- FIM DA ALTERAÇÃO ---
+terrainCheckbox.addEventListener('change', () => {
+    if (terrainCheckbox.checked && Object.keys(terrainData).length === 0) {
+        fetchTerrainData();
+    }
+    terrainDisplay.classList.toggle('hidden', !terrainCheckbox.checked);
+});
+
+// --- INÍCIO DA CORREÇÃO: Definições dos ícones restauradas ---
+const suggestionIcon = L.icon({ iconUrl: 'data:image/svg+xml;base64,' + btoa(`<svg xmlns="http://www.w3.org/2000/svg" width="25" height="41" viewBox="0 0 25 41"><path fill="#2E8B57" stroke="#FFFFFF" stroke-width="1.5" d="M12.5 0C5.6 0 0 5.6 0 12.5c0 12.5 12.5 28.5 12.5 28.5s12.5-16 12.5-28.5C25 5.6 19.4 0 12.5 0z"/><circle fill="#FFFFFF" cx="12.5" cy="12.5" r="4"/></svg>`), iconSize: [25, 41], iconAnchor: [12, 41], popupAnchor: [1, -34] });
+const userIcon = L.icon({ iconUrl: 'data:image/svg+xml;base64,' + btoa(`<svg xmlns="http://www.w3.org/2000/svg" width="25" height="41" viewBox="0 0 25 41"><path fill="#03dac6" stroke="#121212" stroke-width="1" d="M12.5 0C5.6 0 0 5.6 0 12.5c0 12.5 12.5 28.5 12.5 28.5s12.5-16 12.5-28.5C25 5.6 19.4 0 12.5 0z"/><circle fill="#121212" cx="12.5" cy="12.5" r="4"/></svg>`), iconSize: [25, 41], iconAnchor: [12, 41], popupAnchor: [1, -34] });
+// --- FIM DA CORREÇÃO ---
 
 function updatePositionControls() {
     const speedoPos = speedoCheckbox.checked ? document.querySelector('input[name="speedoPosition"]:checked').value : null;
@@ -110,15 +120,36 @@ function updatePositionControls() {
     speedoPositionRadios.forEach(radio => { radio.disabled = (radio.value === trackPos); });
 }
 
+async function fetchTerrainData() {
+    if (!gpxDataPoints || gpxDataPoints.length === 0 || !terrainCheckbox.checked) return;
+    statusDiv.textContent = t('fetching_terrain');
+    const sampleRate = Math.max(1, Math.floor(gpxDataPoints.length / 50));
+    const sampledPoints = gpxDataPoints.filter((_, index) => index % sampleRate === 0).map(p => ({ lat: p.lat, lon: p.lon, time: p.time.toISOString() }));
+    try {
+        const response = await fetch('/terrain', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ points: sampledPoints, lang: currentLang }) });
+        if (response.ok) {
+            terrainData = await response.json();
+            const firstKey = Object.keys(terrainData)[0];
+            if(firstKey) { updateTerrainDisplay(terrainData[firstKey]); }
+        } else { console.error('Failed to fetch terrain data'); }
+    } catch (error) { console.error('Error fetching terrain data:', error); } 
+    finally { statusDiv.textContent = t('suggestion_applied'); }
+}
+
+function updateTerrainDisplay(terrainType) {
+    if (terrainCheckbox.checked) {
+        terrainDisplay.textContent = `🏞️ ${terrainType || t('unknown_terrain')}`;
+        terrainDisplay.classList.remove('hidden');
+    }
+}
+
 async function fetchAndApplySuggestion() {
     if (!gpxFile || !videoFile) return;
     statusDiv.textContent = t('analyzing_files');
     const formData = new FormData();
     formData.append('gpxFile', gpxFile);
     formData.append('videoFile', videoFile);
-    // --- INÍCIO DA ALTERAÇÃO: Enviar o nível de interpolação para sugestão ---
     formData.append('interpolationLevel', interpolationSlider.value);
-    // --- FIM DA ALTERAÇÃO ---
     try {
         const response = await fetch('/suggest', { method: 'POST', body: formData });
         const data = await response.json();
@@ -140,14 +171,64 @@ async function fetchAndApplySuggestion() {
     }
 }
 
-const suggestionIcon = L.icon({ iconUrl: 'data:image/svg+xml;base64,' + btoa(`<svg xmlns="http://www.w3.org/2000/svg" width="25" height="41" viewBox="0 0 25 41"><path fill="#2E8B57" stroke="#FFFFFF" stroke-width="1.5" d="M12.5 0C5.6 0 0 5.6 0 12.5c0 12.5 12.5 28.5 12.5 28.5s12.5-16 12.5-28.5C25 5.6 19.4 0 12.5 0z"/><circle fill="#FFFFFF" cx="12.5" cy="12.5" r="4"/></svg>`), iconSize: [25, 41], iconAnchor: [12, 41], popupAnchor: [1, -34] });
-const userIcon = L.icon({ iconUrl: 'data:image/svg+xml;base64,' + btoa(`<svg xmlns="http://www.w3.org/2000/svg" width="25" height="41" viewBox="0 0 25 41"><path fill="#03dac6" stroke="#121212" stroke-width="1" d="M12.5 0C5.6 0 0 5.6 0 12.5c0 12.5 12.5 28.5 12.5 28.5s12.5-16 12.5-28.5C25 5.6 19.4 0 12.5 0z"/><circle fill="#121212" cx="12.5" cy="12.5" r="4"/></svg>`), iconSize: [25, 41], iconAnchor: [12, 41], popupAnchor: [1, -34] });
+function handleGpxUpload(event) {
+    gpxFile = event.target.files[0];
+    if (!gpxFile) return;
+    gpxInfo.textContent = gpxFile.name;
+    statusDiv.textContent = t('gpx_loaded');
+    videoInput.disabled = false;
+    videoInfo.textContent = t('can_select_video');
+    fetchAndApplySuggestion();
+}
 
-function handleGpxUpload(event) { gpxFile = event.target.files[0]; if (!gpxFile) return; gpxInfo.textContent = gpxFile.name; statusDiv.textContent = t('gpx_loaded'); videoInput.disabled = false; videoInfo.textContent = t('can_select_video'); fetchAndApplySuggestion(); }
-function handleVideoUpload(event) { videoFile = event.target.files[0]; if (!videoFile) return; videoInfo.textContent = videoFile.name; checkAndShowMapSection(); fetchAndApplySuggestion(); }
-function checkAndShowMapSection() { if (gpxFile && videoFile) { mapSection.style.display = 'block'; syncPointInfo.style.display = 'block'; setTimeout(() => map.invalidateSize(), 100); } }
-function displayTrack(points) { if (trackLayer) map.removeLayer(trackLayer); const latLngs = points.map(p => [p.lat, p.lon]); trackLayer = L.polyline(latLngs, { color: '#bb86fc', weight: 3, opacity: 0.8 }).addTo(map); const bounds = trackLayer.getBounds(); if (bounds.isValid()) { map.fitBounds(bounds.pad(0.1)); } trackLayer.on('click', (e) => { let closestPoint = null, minDistance = Infinity; gpxDataPoints.forEach(p => { const distance = map.distance([p.lat, p.lon], e.latlng); if (distance < minDistance) { minDistance = distance; closestPoint = p; } }); if (closestPoint) { selectSyncPoint(closestPoint, false); } }); }
-function selectSyncPoint(point, isSuggestion) { selectedSyncPoint = point; if (userMarker) map.removeLayer(userMarker); if (suggestionMarker) map.removeLayer(suggestionMarker); const iconToUse = isSuggestion ? suggestionIcon : userIcon; const newMarker = L.marker([point.lat, point.lon], { icon: iconToUse }).addTo(map); if(isSuggestion) { suggestionMarker = newMarker; } else { userMarker = newMarker; } const pointTime = new Date(point.time).toLocaleString(currentLang.startsWith('en') ? 'en-US' : 'pt-BR', { timeZone: 'UTC' }); syncPointInfo.textContent = t('sync_point_selected', { type: isSuggestion ? t('suggestion_type') : t('manual_type'), time: pointTime }); if (videoFile) { positionSection.style.display = 'block'; generateBtn.style.display = 'flex'; updatePositionControls(); } }
+function handleVideoUpload(event) {
+    videoFile = event.target.files[0];
+    if (!videoFile) return;
+    videoInfo.textContent = videoFile.name;
+    checkAndShowMapSection();
+    fetchAndApplySuggestion();
+}
+
+function checkAndShowMapSection() { 
+    if (gpxFile && videoFile) { 
+        mapSection.style.display = 'block'; 
+        syncPointInfo.style.display = 'block'; 
+        setTimeout(() => map.invalidateSize(), 100); 
+    } 
+}
+
+function displayTrack(points) { 
+    if (trackLayer) map.removeLayer(trackLayer); 
+    const latLngs = points.map(p => [p.lat, p.lon]); 
+    trackLayer = L.polyline(latLngs, { color: '#bb86fc', weight: 3, opacity: 0.8 }).addTo(map); 
+    const bounds = trackLayer.getBounds();
+    if (bounds.isValid()) { map.fitBounds(bounds.pad(0.1)); }
+    trackLayer.on('click', (e) => { 
+        let closestPoint = null, minDistance = Infinity; 
+        gpxDataPoints.forEach(p => { 
+            const distance = map.distance([p.lat, p.lon], e.latlng);
+            if (distance < minDistance) { minDistance = distance; closestPoint = p; } 
+        }); 
+        if (closestPoint) { selectSyncPoint(closestPoint, false); } 
+    });
+    fetchTerrainData();
+}
+
+function selectSyncPoint(point, isSuggestion) { 
+    selectedSyncPoint = point; 
+    if (userMarker) map.removeLayer(userMarker); 
+    if (suggestionMarker) map.removeLayer(suggestionMarker); 
+    const iconToUse = isSuggestion ? suggestionIcon : userIcon; 
+    const newMarker = L.marker([point.lat, point.lon], { icon: iconToUse }).addTo(map); 
+    if(isSuggestion) { suggestionMarker = newMarker; } else { userMarker = newMarker; } 
+    const pointTime = new Date(point.time).toLocaleString(currentLang.startsWith('en') ? 'en-US' : 'pt-BR', { timeZone: 'UTC' }); 
+    syncPointInfo.textContent = t('sync_point_selected', { type: isSuggestion ? t('suggestion_type') : t('manual_type'), time: pointTime });
+    if (videoFile) { 
+        positionSection.style.display = 'block'; 
+        generateBtn.style.display = 'flex';
+        updatePositionControls();
+    } 
+}
 
 function handleGenerate() {
     if (!gpxFile || !videoFile || !selectedSyncPoint) { statusDiv.textContent = t('error_missing_files'); return; }
@@ -164,9 +245,7 @@ function handleGenerate() {
     formData.append('videoFile', videoFile);
     formData.append('syncTimestamp', selectedSyncPoint.time.toISOString());
     formData.append('lang', currentLang);
-    // --- INÍCIO DA ALTERAÇÃO: Enviar o nível de interpolação ---
     formData.append('interpolationLevel', interpolationSlider.value);
-    // --- FIM DA ALTERAÇÃO ---
 
     formData.append('addSpeedoOverlay', speedoCheckbox.checked);
     if (speedoCheckbox.checked) { formData.append('speedoPosition', document.querySelector('input[name="speedoPosition"]:checked').value); }

@@ -2,8 +2,8 @@ use std::error::Error;
 use image::{Rgba, RgbaImage};
 use image::imageops::FilterType;
 use imageproc::point::Point;
-use imageproc::drawing::{draw_polygon_mut, draw_filled_circle_mut, draw_line_segment_mut, draw_text_mut};
-use rusttype::{Font, Scale};
+use imageproc::drawing::{draw_polygon_mut, draw_filled_circle_mut, draw_line_segment_mut, draw_text_mut, text_size};
+use ab_glyph::{Font, FontRef, PxScale};
 use gpx::Gpx;
 
 pub fn generate_speedometer_image(speed_kmh: f64, bearing: f64, g_force: f64, elevation: f64, output_path: &str, lang: &str) -> Result<(), Box<dyn Error>> {
@@ -22,8 +22,8 @@ pub fn generate_speedometer_image(speed_kmh: f64, bearing: f64, g_force: f64, el
 
     let font_data_regular = include_bytes!("../DejaVuSans.ttf");
     let font_data_bold = include_bytes!("../DejaVuSans-Bold.ttf");
-    let font_regular = Font::try_from_bytes(&font_data_regular[..]).ok_or("Falha ao carregar a fonte regular")?;
-    let font_bold = Font::try_from_bytes(&font_data_bold[..]).ok_or("Falha ao carregar a fonte em negrito")?;
+    let font_regular = FontRef::try_from_slice(font_data_regular)?;
+    let font_bold = FontRef::try_from_slice(font_data_bold)?;
     
     draw_filled_circle_mut(&mut img, CENTER, (RADIUS + 15.0 * SCALE_FACTOR as f32) as i32, transparent_black);
 
@@ -39,7 +39,7 @@ pub fn generate_speedometer_image(speed_kmh: f64, bearing: f64, g_force: f64, el
     );
     draw_filled_circle_mut(&mut img, (end_x as i32, end_y as i32), 6 * SCALE_FACTOR as i32, white);
 
-    let scale_text = Scale::uniform(22.0 * SCALE_FACTOR as f32);
+    let scale_text = PxScale::from(22.0 * SCALE_FACTOR as f32);
     for i in 0..=MAX_SPEED as i32 {
         if i % 5 == 0 {
             let angle = 90.0 + (i as f64 / MAX_SPEED) * 270.0;
@@ -56,7 +56,6 @@ pub fn generate_speedometer_image(speed_kmh: f64, bearing: f64, g_force: f64, el
         }
     }
     
-    // --- INÍCIO DA ALTERAÇÃO: Bússola internacionalizada ---
     let (east_label, west_label) = if lang == "en" { ("E", "W") } else { ("L", "O") };
     let compass_radius = 40.0 * SCALE_FACTOR as f32;
     let bearing_rad = bearing.to_radians() as f32;
@@ -64,7 +63,6 @@ pub fn generate_speedometer_image(speed_kmh: f64, bearing: f64, g_force: f64, el
     draw_centered_text_mut(&mut img, white, CENTER.0, CENTER.1 + (compass_radius + 10.0 * SCALE_FACTOR as f32) as i32, scale_text, &font_regular, "S");
     draw_centered_text_mut(&mut img, white, CENTER.0 + (compass_radius + 10.0 * SCALE_FACTOR as f32) as i32, CENTER.1, scale_text, &font_regular, east_label);
     draw_centered_text_mut(&mut img, white, CENTER.0 - (compass_radius + 10.0 * SCALE_FACTOR as f32) as i32, CENTER.1, scale_text, &font_regular, west_label);
-    // --- FIM DA ALTERAÇÃO ---
 
     let p_n = Point { x: CENTER.0, y: CENTER.1 - compass_radius as i32 };
     let p_s = Point { x: CENTER.0, y: CENTER.1 + (15 * SCALE_FACTOR as i32) };
@@ -79,16 +77,16 @@ pub fn generate_speedometer_image(speed_kmh: f64, bearing: f64, g_force: f64, el
     draw_polygon_mut(&mut img, &[rotated_n, rotated_e, rotated_s, rotated_w], Rgba([255, 0, 0, 255]));
 
     let speed_color = speed_to_color(speed_kmh, MAX_SPEED);
-    let scale_speed = Scale::uniform(60.0 * SCALE_FACTOR as f32);
+    let scale_speed = PxScale::from(60.0 * SCALE_FACTOR as f32);
     let speed_text = format!("{:.0}", speed_kmh);
     draw_text_mut(&mut img, speed_color, CENTER.0 + (30 * SCALE_FACTOR as i32), CENTER.1 + (50 * SCALE_FACTOR as i32), scale_speed, &font_bold, &speed_text);
-    let scale_unit = Scale::uniform(20.0 * SCALE_FACTOR as f32);
+    let scale_unit = PxScale::from(20.0 * SCALE_FACTOR as f32);
     draw_text_mut(&mut img, white, CENTER.0 + (35 * SCALE_FACTOR as i32), CENTER.1 + (100 * SCALE_FACTOR as i32), scale_unit, &font_regular, "KM/H");
 
     let g_force_text = format!("{:.1} g", g_force);
     let g_force_center = ((45 * SCALE_FACTOR as i32), (35 * SCALE_FACTOR as i32));
     draw_filled_circle_mut(&mut img, g_force_center, 30 * SCALE_FACTOR as i32, transparent_black);
-    draw_centered_text_mut(&mut img, white, g_force_center.0, g_force_center.1, Scale::uniform(20.0 * SCALE_FACTOR as f32), &font_regular, &g_force_text);
+    draw_centered_text_mut(&mut img, white, g_force_center.0, g_force_center.1, PxScale::from(20.0 * SCALE_FACTOR as f32), &font_regular, &g_force_text);
     
     let elevation_text = format!("{:.0} m", elevation);
     let elevation_center = (
@@ -96,8 +94,8 @@ pub fn generate_speedometer_image(speed_kmh: f64, bearing: f64, g_force: f64, el
         (IMG_SIZE as i32 - (45 * SCALE_FACTOR as i32))
     );
     draw_filled_circle_mut(&mut img, elevation_center, 30 * SCALE_FACTOR as i32, transparent_black);
-    draw_centered_text_mut(&mut img, white, elevation_center.0, elevation_center.1 - (5 * SCALE_FACTOR as i32), Scale::uniform(16.0 * SCALE_FACTOR as f32), &font_regular, "ALT");
-    draw_centered_text_mut(&mut img, white, elevation_center.0, elevation_center.1 + (10 * SCALE_FACTOR as i32), Scale::uniform(20.0 * SCALE_FACTOR as f32), &font_bold, &elevation_text);
+    draw_centered_text_mut(&mut img, white, elevation_center.0, elevation_center.1 - (5 * SCALE_FACTOR as i32), PxScale::from(16.0 * SCALE_FACTOR as f32), &font_regular, "ALT");
+    draw_centered_text_mut(&mut img, white, elevation_center.0, elevation_center.1 + (10 * SCALE_FACTOR as i32), PxScale::from(20.0 * SCALE_FACTOR as f32), &font_bold, &elevation_text);
 
     let final_img = image::imageops::resize(
         &img,
@@ -233,19 +231,13 @@ fn rotate_point(point: Point<i32>, center: (i32, i32), angle_rad: f32) -> Point<
     Point { x: (x_new + center.0 as f32) as i32, y: (y_new + center.1 as f32) as i32 }
 }
 
-fn draw_centered_text_mut(img: &mut RgbaImage, color: Rgba<u8>, x: i32, y: i32, scale: Scale, font: &Font, text: &str) {
-    let lines: Vec<&str> = text.lines().collect();
-    let v_metrics = font.v_metrics(scale);
-    let line_height = v_metrics.ascent - v_metrics.descent + v_metrics.line_gap;
-    let total_height = line_height * lines.len() as f32;
-
-    for (i, line) in lines.iter().enumerate() {
-        let glyphs: Vec<_> = font.layout(line, scale, rusttype::point(0.0, v_metrics.ascent)).collect();
-        let text_width = glyphs.iter().map(|g| g.unpositioned().h_metrics().advance_width).sum::<f32>();
-        let final_x = x as f32 - text_width / 2.0;
-        let final_y = (y as f32 - total_height / 2.0) + (i as f32 * line_height);
-        draw_text_mut(img, color, final_x as i32, final_y as i32, scale, font, line);
-    }
+fn draw_centered_text_mut(img: &mut RgbaImage, color: Rgba<u8>, x: i32, y: i32, scale: PxScale, font: &impl Font, text: &str) {
+    // --- INÍCIO DA CORREÇÃO: Converter (cast) u32 para i32 ---
+    let (text_width, text_height) = text_size(scale, font, text);
+    let final_x = x - (text_width as i32) / 2;
+    let final_y = y - (text_height as i32) / 2;
+    // --- FIM DA CORREÇÃO ---
+    draw_text_mut(img, color, final_x, final_y, scale, font, text);
 }
 
 fn speed_to_color(speed: f64, max_speed: f64) -> Rgba<u8> {
