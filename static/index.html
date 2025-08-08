@@ -13,7 +13,7 @@
 </head>
 <body>
     <div id="app">
-        <h1>🎬 Sincronização Interativa GPX + Vídeo</h1>
+        <h1>� Sincronização Interativa GPX + Vídeo</h1>
         
         <div class="section">
             <div class="section-title"><span class="step-number">1</span>Selecionar Ficheiros</div>
@@ -44,22 +44,44 @@
             <div id="sync-point-info">🎯 Clique num ponto no mapa para o definir como o início da sincronização.</div>
         </div>
 
-        <div id="position-section" class="section compact-section" style="display: none;">
-             <fieldset class="position-container">
-                <legend><span class="step-number">3</span>Configuração do Overlay</legend>
-                <div class="position-grid">
-                    <label class="position-grid-cell"><input type="radio" name="overlayPosition" value="top-left"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><path d="M12 4 L10.59 5.41 L16.17 11 H4 V13 H16.17 L10.59 18.59 L12 20 L20 12 Z" transform="rotate(-135 12 12)"/></svg></label>
-                    <label class="position-grid-cell"><input type="radio" name="overlayPosition" value="top-right"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><path d="M12 4 L10.59 5.41 L16.17 11 H4 V13 H16.17 L10.59 18.59 L12 20 L20 12 Z" transform="rotate(-45 12 12)"/></svg></label>
-                    <label class="position-grid-cell"><input type="radio" name="overlayPosition" value="bottom-left" checked><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><path d="M12 4 L10.59 5.41 L16.17 11 H4 V13 H16.17 L10.59 18.59 L12 20 L20 12 Z" transform="rotate(135 12 12)"/></svg></label>
-                    <label class="position-grid-cell"><input type="radio" name="overlayPosition" value="bottom-right"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><path d="M12 4 L10.59 5.41 L16.17 11 H4 V13 H16.17 L10.59 18.59 L12 20 L20 12 Z" transform="rotate(45 12 12)"/></svg></label>
+        <div id="position-section" class="section" style="display: none;">
+            <div class="section-title"><span class="step-number">3</span>Configuração dos Overlays</div>
+            <div class="overlays-config-container">
+                <!-- Controle do Velocímetro -->
+                <div class="overlay-control-group">
+                    <div class="overlay-toggle">
+                        <input type="checkbox" id="add-speedo-overlay" name="addSpeedoOverlay" checked>
+                        <label for="add-speedo-overlay"> speedometer️ Adicionar Velocímetro</label>
+                    </div>
+                    <fieldset class="position-container" id="speedo-position-container">
+                        <legend>Posição do Velocímetro</legend>
+                        <div class="position-grid">
+                            <!-- INÍCIO DA ALTERAÇÃO: SVGs padronizados -->
+                            <label class="position-grid-cell"><input type="radio" name="speedoPosition" value="top-left"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 20 L4 4 M12 4 L4 4 L4 12"/></svg></label>
+                            <label class="position-grid-cell"><input type="radio" name="speedoPosition" value="top-right"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20 L20 4 M12 4 L20 4 L20 12"/></svg></label>
+                            <label class="position-grid-cell"><input type="radio" name="speedoPosition" value="bottom-left" checked><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 4 L4 20 M12 20 L4 20 L4 12"/></svg></label>
+                            <label class="position-grid-cell"><input type="radio" name="speedoPosition" value="bottom-right"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4 L20 20 M12 20 L20 20 L20 12"/></svg></label>
+                            <!-- FIM DA ALTERAÇÃO -->
+                        </div>
+                    </fieldset>
                 </div>
-                 <!-- INÍCIO DA ALTERAÇÃO: Checkbox para o overlay do trajeto -->
-                <div class="track-overlay-toggle">
-                    <input type="checkbox" id="add-track-overlay" name="add-track-overlay" checked>
-                    <label for="add-track-overlay">🗺️ Adicionar mapa do trajeto</label>
+                <!-- Controle do Mapa do Trajeto -->
+                <div class="overlay-control-group">
+                    <div class="overlay-toggle">
+                        <input type="checkbox" id="add-track-overlay" name="addTrackOverlay" checked>
+                        <label for="add-track-overlay">🗺️ Adicionar Mapa do Trajeto</label>
+                    </div>
+                    <fieldset class="position-container" id="track-position-container">
+                        <legend>Posição do Mapa</legend>
+                        <div class="position-grid">
+                            <label class="position-grid-cell"><input type="radio" name="trackPosition" value="top-left"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 20 L4 4 M12 4 L4 4 L4 12"/></svg></label>
+                            <label class="position-grid-cell"><input type="radio" name="trackPosition" value="top-right" checked><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20 L20 4 M12 4 L20 4 L20 12"/></svg></label>
+                            <label class="position-grid-cell"><input type="radio" name="trackPosition" value="bottom-left"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 4 L4 20 M12 20 L4 20 L4 12"/></svg></label>
+                            <label class="position-grid-cell"><input type="radio" name="trackPosition" value="bottom-right"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4 L20 20 M12 20 L20 20 L20 12"/></svg></label>
+                        </div>
+                    </fieldset>
                 </div>
-                <!-- FIM DA ALTERAÇÃO -->
-            </fieldset>
+            </div>
         </div>
 
         <button id="generate-btn" style="display: none;">🚀 Confirmar e Gerar Vídeo</button>

@@ -1,3 +1,4 @@
+// Elementos da UI
 const gpxInput = document.getElementById('gpx-file');
 const videoInput = document.getElementById('video-file');
 const generateBtn = document.getElementById('generate-btn');
@@ -15,12 +16,60 @@ const mapElement = document.getElementById('map');
 const mapSection = document.getElementById('map-section');
 const trackInfoDiv = document.getElementById('track-info');
 const positionSection = document.getElementById('position-section');
+
+// --- INÍCIO DA ALTERAÇÃO: Seletores para os novos controles ---
+const speedoCheckbox = document.getElementById('add-speedo-overlay');
+const trackCheckbox = document.getElementById('add-track-overlay');
+const speedoPositionContainer = document.getElementById('speedo-position-container');
+const trackPositionContainer = document.getElementById('track-position-container');
+const speedoPositionRadios = document.querySelectorAll('input[name="speedoPosition"]');
+const trackPositionRadios = document.querySelectorAll('input[name="trackPosition"]');
+// --- FIM DA ALTERAÇÃO ---
+
+// Variáveis de estado
 let gpxFile = null, videoFile = null, selectedSyncPoint = null, map = null, trackLayer = null, userMarker = null, suggestionMarker = null, gpxDataPoints = [];
+
+// Inicialização do mapa
 map = L.map('map').setView([0, 0], 2);
 L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors' }).addTo(map);
+
+// Event Listeners
 gpxInput.addEventListener('change', handleGpxUpload);
 videoInput.addEventListener('change', handleVideoUpload);
 generateBtn.addEventListener('click', handleGenerate);
+
+// --- INÍCIO DA ALTERAÇÃO: Listeners para os novos controles ---
+speedoCheckbox.addEventListener('change', () => {
+    speedoPositionContainer.classList.toggle('hidden', !speedoCheckbox.checked);
+    updatePositionControls();
+});
+
+trackCheckbox.addEventListener('change', () => {
+    trackPositionContainer.classList.toggle('hidden', !trackCheckbox.checked);
+    updatePositionControls();
+});
+
+speedoPositionRadios.forEach(radio => radio.addEventListener('change', updatePositionControls));
+trackPositionRadios.forEach(radio => radio.addEventListener('change', updatePositionControls));
+// --- FIM DA ALTERAÇÃO ---
+
+
+// --- INÍCIO DA ALTERAÇÃO: Nova função para sincronizar os controles de posição ---
+function updatePositionControls() {
+    const speedoPos = speedoCheckbox.checked ? document.querySelector('input[name="speedoPosition"]:checked').value : null;
+    const trackPos = trackCheckbox.checked ? document.querySelector('input[name="trackPosition"]:checked').value : null;
+
+    // Habilita/desabilita as opções do mapa com base na seleção do velocímetro
+    trackPositionRadios.forEach(radio => {
+        radio.disabled = (radio.value === speedoPos);
+    });
+
+    // Habilita/desabilita as opções do velocímetro com base na seleção do mapa
+    speedoPositionRadios.forEach(radio => {
+        radio.disabled = (radio.value === trackPos);
+    });
+}
+// --- FIM DA ALTERAÇÃO ---
 
 async function fetchAndApplySuggestion() {
     if (!gpxFile || !videoFile) return;
@@ -34,7 +83,7 @@ async function fetchAndApplySuggestion() {
 
         if (data.interpolated_points && data.interpolated_points.length > 0) {
             statusDiv.textContent = "Percurso de alta precisão carregado do servidor.";
-            gpxDataPoints = data.interpolated_points.map(p => ({ ...p, time: new Date(p.time) })); // Converte string de tempo para Objeto Date
+            gpxDataPoints = data.interpolated_points.map(p => ({ ...p, time: new Date(p.time) }));
             displayTrack(gpxDataPoints);
         }
 
@@ -74,18 +123,63 @@ function handleVideoUpload(event) {
     fetchAndApplySuggestion();
 }
 
-function checkAndShowMapSection() { if (gpxFile && videoFile) { mapSection.style.display = 'block'; syncPointInfo.style.display = 'block'; setTimeout(() => map.invalidateSize(), 100); } }
-function calculateTrackBounds(points) { if (!points || points.length === 0) return null; let minLat = points[0].lat, maxLat = points[0].lat, minLon = points[0].lon, maxLon = points[0].lon; points.forEach(point => { minLat = Math.min(minLat, point.lat); maxLat = Math.max(maxLat, point.lat); minLon = Math.min(minLon, point.lon); maxLon = Math.max(maxLon, point.lon); }); return { southWest: [minLat, minLon], northEast: [maxLat, maxLon] }; }
-function calculateTrackDistance(points) { if (!points || points.length < 2) return 0; let totalDistance = 0; for (let i = 1; i < points.length; i++) { const prev = points[i - 1], curr = points[i]; const R = 6371000, dLat = (curr.lat - prev.lat) * Math.PI / 180, dLon = (curr.lon - prev.lon) * Math.PI / 180, a = Math.sin(dLat/2) * Math.sin(dLat/2) + Math.cos(prev.lat * Math.PI / 180) * Math.cos(curr.lat * Math.PI / 180) * Math.sin(dLon/2) * Math.sin(dLon/2), c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a)); totalDistance += R * c; } return totalDistance; }
-function displayTrack(points) { if (trackLayer) map.removeLayer(trackLayer); const bounds = calculateTrackBounds(points); if (!bounds) return; const distance = calculateTrackDistance(points); trackInfoDiv.style.display = 'block'; trackInfoDiv.innerHTML = `<strong>Informações do Percurso (Alta Precisão):</strong><br>📍 Pontos: ${points.length} | 📏 Distância: ${(distance / 1000).toFixed(2)} km`; const latLngs = points.map(p => [p.lat, p.lon]); trackLayer = L.polyline(latLngs, { color: '#bb86fc', weight: 3, opacity: 0.8 }).addTo(map); const leafletBounds = L.latLngBounds(bounds.southWest, bounds.northEast); map.fitBounds(leafletBounds.pad(0.1), { padding: [20, 20] }); trackLayer.on('click', (e) => { const clickedLat = e.latlng.lat, clickedLon = e.latlng.lng; let closestPoint = null, minDistance = Infinity; gpxDataPoints.forEach(p => { const distance = Math.sqrt(Math.pow(p.lat - clickedLat, 2) + Math.pow(p.lon - clickedLon, 2)); if (distance < minDistance) { minDistance = distance; closestPoint = p; } }); if (closestPoint) { selectSyncPoint(closestPoint, false); } }); }
-function selectSyncPoint(point, isSuggestion) { selectedSyncPoint = point; if (userMarker) map.removeLayer(userMarker); if (suggestionMarker) map.removeLayer(suggestionMarker); const iconToUse = isSuggestion ? suggestionIcon : userIcon; const newMarker = L.marker([point.lat, point.lon], { icon: iconToUse }).addTo(map); if(isSuggestion) { suggestionMarker = newMarker; } else { userMarker = newMarker; } const pointTime = new Date(point.time).toLocaleString('pt-BR', { timeZone: 'UTC' }); syncPointInfo.textContent = `Ponto selecionado (${isSuggestion ? 'sugestão' : 'manual'}): ${pointTime} (UTC)`; if (videoFile) { generateBtn.style.display = 'block'; positionSection.style.display = 'block'; } }
+function checkAndShowMapSection() { 
+    if (gpxFile && videoFile) { 
+        mapSection.style.display = 'block'; 
+        syncPointInfo.style.display = 'block'; 
+        setTimeout(() => map.invalidateSize(), 100); 
+    } 
+}
+
+function displayTrack(points) { 
+    if (trackLayer) map.removeLayer(trackLayer); 
+    const latLngs = points.map(p => [p.lat, p.lon]); 
+    trackLayer = L.polyline(latLngs, { color: '#bb86fc', weight: 3, opacity: 0.8 }).addTo(map); 
+    const bounds = trackLayer.getBounds();
+    if (bounds.isValid()) {
+        map.fitBounds(bounds.pad(0.1));
+    }
+    trackLayer.on('click', (e) => { 
+        const clickedLat = e.latlng.lat, clickedLon = e.latlng.lng; 
+        let closestPoint = null, minDistance = Infinity; 
+        gpxDataPoints.forEach(p => { 
+            const distance = map.distance([p.lat, p.lon], e.latlng);
+            if (distance < minDistance) { 
+                minDistance = distance; 
+                closestPoint = p; 
+            } 
+        }); 
+        if (closestPoint) { 
+            selectSyncPoint(closestPoint, false); 
+        } 
+    }); 
+}
+
+function selectSyncPoint(point, isSuggestion) { 
+    selectedSyncPoint = point; 
+    if (userMarker) map.removeLayer(userMarker); 
+    if (suggestionMarker) map.removeLayer(suggestionMarker); 
+    const iconToUse = isSuggestion ? suggestionIcon : userIcon; 
+    const newMarker = L.marker([point.lat, point.lon], { icon: iconToUse }).addTo(map); 
+    if(isSuggestion) { 
+        suggestionMarker = newMarker; 
+    } else { 
+        userMarker = newMarker; 
+    } 
+    const pointTime = new Date(point.time).toLocaleString('pt-BR', { timeZone: 'UTC' }); 
+    syncPointInfo.textContent = `Ponto selecionado (${isSuggestion ? 'sugestão' : 'manual'}): ${pointTime} (UTC)`; 
+    if (videoFile) { 
+        positionSection.style.display = 'block'; 
+        generateBtn.style.display = 'block';
+        updatePositionControls(); // Inicializa os controles de posição
+    } 
+}
 
 function handleGenerate() {
     if (!gpxFile || !videoFile || !selectedSyncPoint) {
         statusDiv.textContent = "Erro: Por favor, selecione os dois ficheiros e um ponto de sincronização.";
         return;
     }
-    const selectedPosition = document.querySelector('input[name="overlayPosition"]:checked').value;
     
     generateBtn.disabled = true;
     statusDiv.textContent = 'A enviar ficheiros...';
@@ -99,11 +193,17 @@ function handleGenerate() {
     formData.append('gpxFile', gpxFile);
     formData.append('videoFile', videoFile);
     formData.append('syncTimestamp', selectedSyncPoint.time.toISOString());
-    formData.append('overlayPosition', selectedPosition);
 
-    // --- INÍCIO DA ALTERAÇÃO: Enviar o valor do novo checkbox ---
-    const addTrackOverlay = document.getElementById('add-track-overlay').checked;
-    formData.append('addTrackOverlay', addTrackOverlay);
+    // --- INÍCIO DA ALTERAÇÃO: Enviar dados dos novos controles ---
+    formData.append('addSpeedoOverlay', speedoCheckbox.checked);
+    if (speedoCheckbox.checked) {
+        formData.append('speedoPosition', document.querySelector('input[name="speedoPosition"]:checked').value);
+    }
+    
+    formData.append('addTrackOverlay', trackCheckbox.checked);
+    if (trackCheckbox.checked) {
+        formData.append('trackPosition', document.querySelector('input[name="trackPosition"]:checked').value);
+    }
     // --- FIM DA ALTERAÇÃO ---
 
     const xhr = new XMLHttpRequest();

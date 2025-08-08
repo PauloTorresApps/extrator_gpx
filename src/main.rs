@@ -17,9 +17,7 @@ use std::path::PathBuf;
 use tower_http::services::ServeDir;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 use uuid::Uuid;
-// --- INÍCIO DA ALTERAÇÃO: Remover Duration, não é mais necessário aqui ---
 use chrono::DateTime;
-// --- FIM DA ALTERAÇÃO ---
 
 #[tokio::main]
 async fn main() {
@@ -67,12 +65,23 @@ struct SuggestionResponse {
     interpolated_points: Option<Vec<PointJson>>,
 }
 
+// --- INÍCIO DA ALTERAÇÃO: Estrutura para os parâmetros de processamento ---
+#[derive(Debug, Default)]
+struct ProcessParams {
+    gpx_path: Option<PathBuf>,
+    video_path: Option<PathBuf>,
+    sync_timestamp: Option<String>,
+    add_speedo_overlay: bool,
+    speedo_position: Option<String>,
+    add_track_overlay: bool,
+    track_position: Option<String>,
+}
+// --- FIM DA ALTERAÇÃO ---
+
 async fn process_files(mut multipart: Multipart) -> impl IntoResponse {
-    let mut gpx_path: Option<PathBuf> = None;
-    let mut video_path: Option<PathBuf> = None;
-    let mut sync_timestamp: Option<String> = None;
-    let mut overlay_position: Option<String> = None;
-    let mut add_track_overlay: bool = false;
+    // --- INÍCIO DA ALTERAÇÃO: Usar a nova estrutura de parâmetros ---
+    let mut params = ProcessParams::default();
+    // --- FIM DA ALTERAÇÃO ---
 
     let upload_dir = PathBuf::from("uploads");
     tokio::fs::create_dir_all(&upload_dir).await.unwrap();
@@ -89,26 +98,38 @@ async fn process_files(mut multipart: Multipart) -> impl IntoResponse {
             let absolute_path = std::fs::canonicalize(&path).unwrap();
 
             if name == "gpxFile" {
-                gpx_path = Some(absolute_path);
+                params.gpx_path = Some(absolute_path);
             } else if name == "videoFile" {
-                video_path = Some(absolute_path);
+                params.video_path = Some(absolute_path);
             }
         } else {
             let data = field.bytes().await.unwrap();
             let value = String::from_utf8(data.to_vec()).unwrap();
-            if name == "syncTimestamp" {
-                sync_timestamp = Some(value);
-            } else if name == "overlayPosition" {
-                overlay_position = Some(value);
-            } else if name == "addTrackOverlay" {
-                add_track_overlay = value.parse().unwrap_or(false);
+            
+            // --- INÍCIO DA ALTERAÇÃO: Mapear todos os novos campos ---
+            match name.as_str() {
+                "syncTimestamp" => params.sync_timestamp = Some(value),
+                "addSpeedoOverlay" => params.add_speedo_overlay = value.parse().unwrap_or(false),
+                "speedoPosition" => params.speedo_position = Some(value),
+                "addTrackOverlay" => params.add_track_overlay = value.parse().unwrap_or(false),
+                "trackPosition" => params.track_position = Some(value),
+                _ => {}
             }
+            // --- FIM DA ALTERAÇÃO ---
         }
     }
 
-    if let (Some(gpx), Some(video), Some(timestamp), Some(position)) = (gpx_path, video_path, sync_timestamp, overlay_position) {
+    if let (Some(gpx), Some(video), Some(timestamp)) = (params.gpx_path, params.video_path, params.sync_timestamp) {
         let result = tokio::task::spawn_blocking(move || {
-            processing::run_processing(gpx, video, timestamp, position, add_track_overlay)
+            processing::run_processing(
+                gpx,
+                video,
+                timestamp,
+                params.add_speedo_overlay,
+                params.speedo_position.unwrap_or_default(),
+                params.add_track_overlay,
+                params.track_position.unwrap_or_default(),
+            )
         }).await.unwrap();
 
         match result {
@@ -132,7 +153,7 @@ async fn process_files(mut multipart: Multipart) -> impl IntoResponse {
         }
     } else {
         let response = ProcessResponse {
-            message: "Erro: Ficheiros, ponto de sincronização ou posição em falta.".to_string(),
+            message: "Erro: Ficheiros ou ponto de sincronização em falta.".to_string(),
             download_url: None,
             logs: vec![],
         };
@@ -140,6 +161,7 @@ async fn process_files(mut multipart: Multipart) -> impl IntoResponse {
     }
 }
 
+// A função suggest_sync_point permanece inalterada
 async fn suggest_sync_point(mut multipart: Multipart) -> impl IntoResponse {
     let mut gpx_path: Option<PathBuf> = None;
     let mut video_path: Option<PathBuf> = None;
@@ -174,7 +196,6 @@ async fn suggest_sync_point(mut multipart: Multipart) -> impl IntoResponse {
                     Ok(gpx_data) => {
                         let interpolated_gpx = utils::interpolate_gpx_points(gpx_data, 1);
                         
-                        // --- INÍCIO DA ALTERAÇÃO: Nova lógica para encontrar o ponto de sincronização ---
                         let first_point_after = interpolated_gpx
                             .tracks
                             .iter()
@@ -188,7 +209,6 @@ async fn suggest_sync_point(mut multipart: Multipart) -> impl IntoResponse {
                                 }
                                 false
                             });
-                        // --- FIM DA ALTERAÇÃO ---
 
                         let points_for_json: Vec<PointJson> = interpolated_gpx.tracks.iter()
                             .flat_map(|t| t.segments.iter())
