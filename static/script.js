@@ -79,4 +79,67 @@ function calculateTrackBounds(points) { if (!points || points.length === 0) retu
 function calculateTrackDistance(points) { if (!points || points.length < 2) return 0; let totalDistance = 0; for (let i = 1; i < points.length; i++) { const prev = points[i - 1], curr = points[i]; const R = 6371000, dLat = (curr.lat - prev.lat) * Math.PI / 180, dLon = (curr.lon - prev.lon) * Math.PI / 180, a = Math.sin(dLat/2) * Math.sin(dLat/2) + Math.cos(prev.lat * Math.PI / 180) * Math.cos(curr.lat * Math.PI / 180) * Math.sin(dLon/2) * Math.sin(dLon/2), c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a)); totalDistance += R * c; } return totalDistance; }
 function displayTrack(points) { if (trackLayer) map.removeLayer(trackLayer); const bounds = calculateTrackBounds(points); if (!bounds) return; const distance = calculateTrackDistance(points); trackInfoDiv.style.display = 'block'; trackInfoDiv.innerHTML = `<strong>Informações do Percurso (Alta Precisão):</strong><br>📍 Pontos: ${points.length} | 📏 Distância: ${(distance / 1000).toFixed(2)} km`; const latLngs = points.map(p => [p.lat, p.lon]); trackLayer = L.polyline(latLngs, { color: '#bb86fc', weight: 3, opacity: 0.8 }).addTo(map); const leafletBounds = L.latLngBounds(bounds.southWest, bounds.northEast); map.fitBounds(leafletBounds.pad(0.1), { padding: [20, 20] }); trackLayer.on('click', (e) => { const clickedLat = e.latlng.lat, clickedLon = e.latlng.lng; let closestPoint = null, minDistance = Infinity; gpxDataPoints.forEach(p => { const distance = Math.sqrt(Math.pow(p.lat - clickedLat, 2) + Math.pow(p.lon - clickedLon, 2)); if (distance < minDistance) { minDistance = distance; closestPoint = p; } }); if (closestPoint) { selectSyncPoint(closestPoint, false); } }); }
 function selectSyncPoint(point, isSuggestion) { selectedSyncPoint = point; if (userMarker) map.removeLayer(userMarker); if (suggestionMarker) map.removeLayer(suggestionMarker); const iconToUse = isSuggestion ? suggestionIcon : userIcon; const newMarker = L.marker([point.lat, point.lon], { icon: iconToUse }).addTo(map); if(isSuggestion) { suggestionMarker = newMarker; } else { userMarker = newMarker; } const pointTime = new Date(point.time).toLocaleString('pt-BR', { timeZone: 'UTC' }); syncPointInfo.textContent = `Ponto selecionado (${isSuggestion ? 'sugestão' : 'manual'}): ${pointTime} (UTC)`; if (videoFile) { generateBtn.style.display = 'block'; positionSection.style.display = 'block'; } }
-function handleGenerate() { if (!gpxFile || !videoFile || !selectedSyncPoint) { statusDiv.textContent = "Erro: Por favor, selecione os dois ficheiros e um ponto de sincronização."; return; } const selectedPosition = document.querySelector('input[name="overlayPosition"]:checked').value; generateBtn.disabled = true; statusDiv.textContent = 'A enviar ficheiros...'; progressContainer.style.display = 'block'; progressBar.style.width = '0%'; progressBar.textContent = '0%'; logsContainer.style.display = 'none'; downloadDiv.style.display = 'none'; const formData = new FormData(); formData.append('gpxFile', gpxFile); formData.append('videoFile', videoFile); formData.append('syncTimestamp', selectedSyncPoint.time.toISOString()); formData.append('overlayPosition', selectedPosition); const xhr = new XMLHttpRequest(); xhr.open('POST', '/process', true); xhr.upload.onprogress = (event) => { if (event.lengthComputable) { const percentComplete = Math.round((event.loaded / event.total) * 100); progressBar.style.width = percentComplete + '%'; progressBar.textContent = percentComplete + '%'; } }; xhr.onload = () => { progressContainer.style.display = 'none'; const result = JSON.parse(xhr.responseText); logsPre.textContent = result.logs.join('\n'); logsContainer.style.display = 'block'; if (xhr.status >= 200 && xhr.status < 300) { statusDiv.textContent = 'Sucesso! O seu vídeo está pronto.'; if (result.download_url) { downloadLink.href = result.download_url; downloadLink.textContent = '📥 Descarregar Vídeo Final'; downloadDiv.style.display = 'block'; } } else { statusDiv.textContent = `Erro: ${result.message || 'Ocorreu um erro no servidor.'}`; } generateBtn.disabled = false; }; xhr.onerror = () => { statusDiv.textContent = 'Erro de rede ao enviar os ficheiros.'; generateBtn.disabled = false; progressContainer.style.display = 'none'; }; xhr.send(formData); }
+
+function handleGenerate() {
+    if (!gpxFile || !videoFile || !selectedSyncPoint) {
+        statusDiv.textContent = "Erro: Por favor, selecione os dois ficheiros e um ponto de sincronização.";
+        return;
+    }
+    const selectedPosition = document.querySelector('input[name="overlayPosition"]:checked').value;
+    
+    generateBtn.disabled = true;
+    statusDiv.textContent = 'A enviar ficheiros...';
+    progressContainer.style.display = 'block';
+    progressBar.style.width = '0%';
+    progressBar.textContent = '0%';
+    logsContainer.style.display = 'none';
+    downloadDiv.style.display = 'none';
+    
+    const formData = new FormData();
+    formData.append('gpxFile', gpxFile);
+    formData.append('videoFile', videoFile);
+    formData.append('syncTimestamp', selectedSyncPoint.time.toISOString());
+    formData.append('overlayPosition', selectedPosition);
+
+    // --- INÍCIO DA ALTERAÇÃO: Enviar o valor do novo checkbox ---
+    const addTrackOverlay = document.getElementById('add-track-overlay').checked;
+    formData.append('addTrackOverlay', addTrackOverlay);
+    // --- FIM DA ALTERAÇÃO ---
+
+    const xhr = new XMLHttpRequest();
+    xhr.open('POST', '/process', true);
+    
+    xhr.upload.onprogress = (event) => {
+        if (event.lengthComputable) {
+            const percentComplete = Math.round((event.loaded / event.total) * 100);
+            progressBar.style.width = percentComplete + '%';
+            progressBar.textContent = percentComplete + '%';
+        }
+    };
+    
+    xhr.onload = () => {
+        progressContainer.style.display = 'none';
+        const result = JSON.parse(xhr.responseText);
+        logsPre.textContent = result.logs.join('\n');
+        logsContainer.style.display = 'block';
+        if (xhr.status >= 200 && xhr.status < 300) {
+            statusDiv.textContent = 'Sucesso! O seu vídeo está pronto.';
+            if (result.download_url) {
+                downloadLink.href = result.download_url;
+                downloadLink.textContent = '📥 Descarregar Vídeo Final';
+                downloadDiv.style.display = 'block';
+            }
+        } else {
+            statusDiv.textContent = `Erro: ${result.message || 'Ocorreu um erro no servidor.'}`;
+        }
+        generateBtn.disabled = false;
+    };
+    
+    xhr.onerror = () => {
+        statusDiv.textContent = 'Erro de rede ao enviar os ficheiros.';
+        generateBtn.disabled = false;
+        progressContainer.style.display = 'none';
+    };
+    
+    xhr.send(formData);
+}

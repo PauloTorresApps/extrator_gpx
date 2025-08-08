@@ -1,6 +1,5 @@
 // src/main.rs
 
-// Declara os novos módulos que farão parte do projeto.
 mod drawing;
 mod processing;
 mod utils;
@@ -18,6 +17,9 @@ use std::path::PathBuf;
 use tower_http::services::ServeDir;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 use uuid::Uuid;
+// --- INÍCIO DA ALTERAÇÃO: Remover Duration, não é mais necessário aqui ---
+use chrono::DateTime;
+// --- FIM DA ALTERAÇÃO ---
 
 #[tokio::main]
 async fn main() {
@@ -36,7 +38,7 @@ async fn main() {
         .nest_service("/output", ServeDir::new("output"))
         .layer(DefaultBodyLimit::max((1024 * 1024 * 1024)*2)); // 2 GB
 
-    let addr = SocketAddr::from(([127, 0, 0, 1], 3000));
+    let addr = SocketAddr::from(([127, 0, 0, 1], 3030));
     tracing::debug!("A escutar em {}", addr);
     let listener = tokio::net::TcpListener::bind(&addr).await.unwrap();
     axum::serve(listener, app).await.unwrap();
@@ -49,12 +51,11 @@ struct ProcessResponse {
     logs: Vec<String>,
 }
 
-// --- INÍCIO DA ALTERAÇÃO ---
 #[derive(Serialize)]
 struct PointJson {
     lat: f64,
     lon: f64,
-    time: Option<String>, // Adicionado o timestamp
+    time: Option<String>,
 }
 
 #[derive(Serialize)]
@@ -65,14 +66,13 @@ struct SuggestionResponse {
     timestamp: Option<String>,
     interpolated_points: Option<Vec<PointJson>>,
 }
-// --- FIM DA ALTERAÇÃO ---
-
 
 async fn process_files(mut multipart: Multipart) -> impl IntoResponse {
     let mut gpx_path: Option<PathBuf> = None;
     let mut video_path: Option<PathBuf> = None;
     let mut sync_timestamp: Option<String> = None;
     let mut overlay_position: Option<String> = None;
+    let mut add_track_overlay: bool = false;
 
     let upload_dir = PathBuf::from("uploads");
     tokio::fs::create_dir_all(&upload_dir).await.unwrap();
@@ -100,13 +100,15 @@ async fn process_files(mut multipart: Multipart) -> impl IntoResponse {
                 sync_timestamp = Some(value);
             } else if name == "overlayPosition" {
                 overlay_position = Some(value);
+            } else if name == "addTrackOverlay" {
+                add_track_overlay = value.parse().unwrap_or(false);
             }
         }
     }
 
     if let (Some(gpx), Some(video), Some(timestamp), Some(position)) = (gpx_path, video_path, sync_timestamp, overlay_position) {
         let result = tokio::task::spawn_blocking(move || {
-            processing::run_processing(gpx, video, timestamp, position)
+            processing::run_processing(gpx, video, timestamp, position, add_track_overlay)
         }).await.unwrap();
 
         match result {
@@ -170,22 +172,35 @@ async fn suggest_sync_point(mut multipart: Multipart) -> impl IntoResponse {
             Ok((video_start_time, _)) => {
                 match gpx::read(std::io::BufReader::new(std::fs::File::open(&gpx_p).unwrap())) {
                     Ok(gpx_data) => {
-                        let interpolated_gpx = utils::interpolate_gpx_points(gpx_data, 2);
-                        let closest_point = utils::find_closest_gpx_point(&interpolated_gpx, video_start_time);
+                        let interpolated_gpx = utils::interpolate_gpx_points(gpx_data, 1);
+                        
+                        // --- INÍCIO DA ALTERAÇÃO: Nova lógica para encontrar o ponto de sincronização ---
+                        let first_point_after = interpolated_gpx
+                            .tracks
+                            .iter()
+                            .flat_map(|track| track.segments.iter())
+                            .flat_map(|segment| segment.points.iter())
+                            .find(|point| {
+                                if let Some(time_str) = point.time.as_ref().and_then(|t| t.format().ok()) {
+                                    if let Ok(point_time) = time_str.parse::<DateTime<chrono::Utc>>() {
+                                        return point_time > video_start_time;
+                                    }
+                                }
+                                false
+                            });
+                        // --- FIM DA ALTERAÇÃO ---
 
-                        // --- INÍCIO DA ALTERAÇÃO ---
                         let points_for_json: Vec<PointJson> = interpolated_gpx.tracks.iter()
                             .flat_map(|t| t.segments.iter())
                             .flat_map(|s| s.points.iter())
                             .map(|p| PointJson { 
                                 lat: p.point().y(), 
                                 lon: p.point().x(),
-                                time: p.time.and_then(|t| t.format().ok()) // Envia o timestamp
+                                time: p.time.and_then(|t| t.format().ok())
                             })
                             .collect();
-                        // --- FIM DA ALTERAÇÃO ---
 
-                        if let Some(point) = closest_point {
+                        if let Some(point) = first_point_after {
                             let point_coords = point.point();
                             let timestamp_str = point.time.and_then(|t| t.format().ok()).unwrap();
 
@@ -197,7 +212,7 @@ async fn suggest_sync_point(mut multipart: Multipart) -> impl IntoResponse {
                                 interpolated_points: Some(points_for_json),
                             })
                         } else {
-                            Json(SuggestionResponse { message: "Nenhum ponto válido encontrado no GPX.".to_string(), latitude: None, longitude: None, timestamp: None, interpolated_points: Some(points_for_json) })
+                            Json(SuggestionResponse { message: "Nenhum ponto GPX encontrado após o início do vídeo.".to_string(), latitude: None, longitude: None, timestamp: None, interpolated_points: Some(points_for_json) })
                         }
                     },
                     Err(_) => Json(SuggestionResponse { message: "Erro ao ler o ficheiro GPX.".to_string(), latitude: None, longitude: None, timestamp: None, interpolated_points: None }),

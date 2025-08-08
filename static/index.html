@@ -46,13 +46,19 @@
 
         <div id="position-section" class="section compact-section" style="display: none;">
              <fieldset class="position-container">
-                <legend><span class="step-number">3</span>Posição do Overlay</legend>
+                <legend><span class="step-number">3</span>Configuração do Overlay</legend>
                 <div class="position-grid">
                     <label class="position-grid-cell"><input type="radio" name="overlayPosition" value="top-left"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><path d="M12 4 L10.59 5.41 L16.17 11 H4 V13 H16.17 L10.59 18.59 L12 20 L20 12 Z" transform="rotate(-135 12 12)"/></svg></label>
                     <label class="position-grid-cell"><input type="radio" name="overlayPosition" value="top-right"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><path d="M12 4 L10.59 5.41 L16.17 11 H4 V13 H16.17 L10.59 18.59 L12 20 L20 12 Z" transform="rotate(-45 12 12)"/></svg></label>
                     <label class="position-grid-cell"><input type="radio" name="overlayPosition" value="bottom-left" checked><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><path d="M12 4 L10.59 5.41 L16.17 11 H4 V13 H16.17 L10.59 18.59 L12 20 L20 12 Z" transform="rotate(135 12 12)"/></svg></label>
                     <label class="position-grid-cell"><input type="radio" name="overlayPosition" value="bottom-right"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><path d="M12 4 L10.59 5.41 L16.17 11 H4 V13 H16.17 L10.59 18.59 L12 20 L20 12 Z" transform="rotate(45 12 12)"/></svg></label>
                 </div>
+                 <!-- INÍCIO DA ALTERAÇÃO: Checkbox para o overlay do trajeto -->
+                <div class="track-overlay-toggle">
+                    <input type="checkbox" id="add-track-overlay" name="add-track-overlay" checked>
+                    <label for="add-track-overlay">🗺️ Adicionar mapa do trajeto</label>
+                </div>
+                <!-- FIM DA ALTERAÇÃO -->
             </fieldset>
         </div>
 

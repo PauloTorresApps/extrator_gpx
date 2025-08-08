@@ -1,4 +1,4 @@
-// Conteúdo completo e corrigido para src/utils.rs
+// src/utils.rs
 
 use std::path::Path;
 use std::error::Error;
@@ -11,7 +11,6 @@ pub fn get_video_time_range(video_path: &Path) -> Result<(DateTime<Utc>, DateTim
     let metadata = ffprobe::ffprobe(video_path).map_err(|e| {
         let error_message = e.to_string();
         if error_message.contains("No such file or directory") || error_message.contains("not found") {
-            // CORREÇÃO: Usamos Box::from para ser explícito sobre o tipo de erro
             Box::<dyn Error>::from("Comando 'ffprobe' não encontrado. Verifique se o FFmpeg está instalado e no PATH do sistema.")
         } else {
             Box::<dyn Error>::from(format!("Erro ao executar o ffprobe: {}", error_message))
@@ -37,7 +36,6 @@ pub fn get_video_time_range(video_path: &Path) -> Result<(DateTime<Utc>, DateTim
     Ok((start_time_utc, start_time_utc + duration))
 }
 
-// Calcula a distância 2D (horizontal) em metros entre dois pontos de GPS.
 fn distance_2d(p1: &Waypoint, p2: &Waypoint) -> f64 {
     const EARTH_RADIUS_METERS: f64 = 6371000.0;
     let lat1 = p1.point().y().to_radians(); 
@@ -54,7 +52,6 @@ fn distance_2d(p1: &Waypoint, p2: &Waypoint) -> f64 {
     EARTH_RADIUS_METERS * c
 }
 
-// Calcula a distância 3D real, considerando a elevação.
 fn distance_3d(p1: &Waypoint, p2: &Waypoint) -> f64 {
     let horizontal_distance = distance_2d(p1, p2);
     
@@ -79,7 +76,6 @@ pub fn calculate_speed_kmh(p1: &Waypoint, p2: &Waypoint) -> Option<f64> {
     None
 }
 
-// Calcula a aceleração em Gs.
 pub fn calculate_g_force(p1: &Waypoint, p2: &Waypoint, p3: &Waypoint) -> Option<f64> {
     let speed1_kmh = calculate_speed_kmh(p1, p2)?;
     let speed2_kmh = calculate_speed_kmh(p2, p3)?;
@@ -102,7 +98,6 @@ pub fn calculate_g_force(p1: &Waypoint, p2: &Waypoint, p3: &Waypoint) -> Option<
     None
 }
 
-// Calcula a direção (bearing) em graus entre dois pontos.
 pub fn calculate_bearing(p1: &Waypoint, p2: &Waypoint) -> f64 {
     let lat1 = p1.point().y().to_radians();
     let lon1 = p1.point().x().to_radians();
@@ -120,32 +115,13 @@ pub fn calculate_bearing(p1: &Waypoint, p2: &Waypoint) -> f64 {
     (initial_bearing_deg + 360.0) % 360.0
 }
 
-/// Encontra o ponto de trilha GPX cujo timestamp é o mais próximo do horário alvo.
-pub fn find_closest_gpx_point(gpx_data: &Gpx, target_time: DateTime<Utc>) -> Option<Waypoint> {
-    gpx_data
-        .tracks
-        .iter()
-        .flat_map(|track| track.segments.iter())
-        .flat_map(|segment| segment.points.iter())
-        .filter_map(|point| {
-            point.time.and_then(|t| t.format().ok()).and_then(|time_str| {
-                if let Ok(point_time) = time_str.parse::<DateTime<Utc>>() {
-                    let duration = (target_time - point_time).num_seconds().abs();
-                    Some((duration, point.clone()))
-                } else {
-                    None
-                }
-            })
-        })
-        .min_by(|(duration1, _), (duration2, _)| duration1.partial_cmp(duration2).unwrap_or(std::cmp::Ordering::Equal))
-        .map(|(_, point)| point)
-}
+// --- INÍCIO DA ALTERAÇÃO: Função `find_closest_gpx_point` removida ---
+// A função não é mais necessária pois a lógica de sugestão mudou.
+// --- FIM DA ALTERAÇÃO ---
 
-/// Interpola pontos entre dois waypoints baseado no tempo
 fn interpolate_points(p1: &Waypoint, p2: &Waypoint, max_interval_secs: i64) -> Vec<Waypoint> {
     let mut interpolated_points = Vec::new();
     
-    // Extrair tempos dos pontos
     let time1_str = match p1.time.as_ref().and_then(|t| t.format().ok()) {
         Some(t) => t,
         None => return interpolated_points,
@@ -168,44 +144,34 @@ fn interpolate_points(p1: &Waypoint, p2: &Waypoint, max_interval_secs: i64) -> V
     
     let time_diff_secs = (time2 - time1).num_seconds();
     
-    // Se o intervalo for menor ou igual ao máximo, não precisa interpolar
     if time_diff_secs <= max_interval_secs {
         return interpolated_points;
     }
     
-    // Calcular quantos pontos precisamos interpolar
     let num_intervals = (time_diff_secs as f64 / max_interval_secs as f64).ceil() as i64;
     let num_points_to_add = num_intervals - 1;
     
-    // Coordenadas dos pontos
     let lat1 = p1.point().y();
     let lon1 = p1.point().x();
     let lat2 = p2.point().y();
     let lon2 = p2.point().x();
     
-    // Elevações (se disponíveis)
     let elev1 = p1.elevation.unwrap_or(0.0);
     let elev2 = p2.elevation.unwrap_or(0.0);
     
-    // Gerar pontos interpolados
     for i in 1..=num_points_to_add {
         let ratio = i as f64 / num_intervals as f64;
         
-        // Interpolação linear das coordenadas
         let new_lat = lat1 + (lat2 - lat1) * ratio;
         let new_lon = lon1 + (lon2 - lon1) * ratio;
         let new_elev = elev1 + (elev2 - elev1) * ratio;
         
-        // Interpolação do tempo
         let time_offset_ms = (time_diff_secs as f64 * ratio * 1000.0) as i64;
         let new_time = time1 + Duration::milliseconds(time_offset_ms);
         
-        // Criar novo waypoint usando builder pattern
         let mut new_waypoint = Waypoint::new(Point::new(new_lon, new_lat));
         new_waypoint.elevation = Some(new_elev);
         
-        // Converter de chrono::DateTime para time::OffsetDateTime
-        // Primeiro convertemos para timestamp Unix e depois para time::OffsetDateTime
         let timestamp = new_time.timestamp();
         let nanos = new_time.timestamp_subsec_nanos();
         
@@ -219,7 +185,6 @@ fn interpolate_points(p1: &Waypoint, p2: &Waypoint, max_interval_secs: i64) -> V
     interpolated_points
 }
 
-/// Interpola pontos GPX para garantir intervalos máximos entre pontos
 pub fn interpolate_gpx_points(mut gpx: Gpx, max_interval_secs: i64) -> Gpx {
     let mut new_tracks = Vec::new();
     
@@ -234,29 +199,23 @@ pub fn interpolate_gpx_points(mut gpx: Gpx, max_interval_secs: i64) -> Gpx {
                 continue;
             }
             
-            // Adicionar o primeiro ponto
             new_points.push(points[0].clone());
             
-            // Processar pontos subsequentes
             for i in 1..points.len() {
                 let p1 = &points[i - 1];
                 let p2 = &points[i];
                 
-                // Interpolar pontos se necessário
                 let interpolated = interpolate_points(p1, p2, max_interval_secs);
                 new_points.extend(interpolated);
                 
-                // Adicionar o ponto atual
                 new_points.push(p2.clone());
             }
             
-            // Criar novo segmento com pontos interpolados
             let mut new_segment = TrackSegment::new();
             new_segment.points = new_points;
             new_segments.push(new_segment);
         }
         
-        // Criar nova track com segmentos interpolados
         let mut new_track = Track::new();
         new_track.name = track.name.clone();
         new_track.comment = track.comment.clone();
@@ -269,7 +228,6 @@ pub fn interpolate_gpx_points(mut gpx: Gpx, max_interval_secs: i64) -> Gpx {
         new_tracks.push(new_track);
     }
     
-    // Criar novo GPX com tracks interpoladas
     gpx.tracks = new_tracks;
     gpx
 }

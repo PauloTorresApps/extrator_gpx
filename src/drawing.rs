@@ -4,8 +4,9 @@ use image::imageops::FilterType;
 use imageproc::point::Point;
 use imageproc::drawing::{draw_polygon_mut, draw_filled_circle_mut, draw_line_segment_mut, draw_text_mut};
 use rusttype::{Font, Scale};
+use gpx::Gpx;
 
-// A função agora aceita a direção (bearing) e a força G
+// A função generate_speedometer_image permanece inalterada
 pub fn generate_speedometer_image(speed_kmh: f64, bearing: f64, g_force: f64, elevation: f64, output_path: &str) -> Result<(), Box<dyn Error>> {
     const SCALE_FACTOR: u32 = 4;
     const FINAL_IMG_SIZE: u32 = 300;
@@ -87,16 +88,14 @@ pub fn generate_speedometer_image(speed_kmh: f64, bearing: f64, g_force: f64, el
     draw_filled_circle_mut(&mut img, g_force_center, 30 * SCALE_FACTOR as i32, transparent_black);
     draw_centered_text_mut(&mut img, white, g_force_center.0, g_force_center.1, Scale::uniform(20.0 * SCALE_FACTOR as f32), &font_regular, &g_force_text);
     
-    // --- NOVO: Bloco de Desenho da Elevação ---
     let elevation_text = format!("{:.0} m", elevation);
     let elevation_center = (
-        (45 * SCALE_FACTOR as i32), // Mesma posição X da Força G
-        (IMG_SIZE as i32 - (45 * SCALE_FACTOR as i32)) // Posição Y no canto inferior
+        (45 * SCALE_FACTOR as i32),
+        (IMG_SIZE as i32 - (45 * SCALE_FACTOR as i32))
     );
     draw_filled_circle_mut(&mut img, elevation_center, 30 * SCALE_FACTOR as i32, transparent_black);
     draw_centered_text_mut(&mut img, white, elevation_center.0, elevation_center.1 - (5 * SCALE_FACTOR as i32), Scale::uniform(16.0 * SCALE_FACTOR as f32), &font_regular, "ALT");
     draw_centered_text_mut(&mut img, white, elevation_center.0, elevation_center.1 + (10 * SCALE_FACTOR as i32), Scale::uniform(20.0 * SCALE_FACTOR as f32), &font_bold, &elevation_text);
-    // --- Fim do Bloco ---
 
     let final_img = image::imageops::resize(
         &img,
@@ -106,6 +105,115 @@ pub fn generate_speedometer_image(speed_kmh: f64, bearing: f64, g_force: f64, el
     );
 
     final_img.save(output_path)?;
+    Ok(())
+}
+
+pub fn generate_dot_image(path: &str, size: u32, color: Rgba<u8>) -> Result<(), Box<dyn Error>> {
+    let mut img = RgbaImage::new(size, size);
+    let center = (size as i32 / 2, size as i32 / 2);
+    let radius = (size / 2) as i32 - (size as i32 / 10);
+    
+    for pixel in img.pixels_mut() {
+        *pixel = Rgba([0, 0, 0, 0]);
+    }
+
+    draw_filled_circle_mut(&mut img, center, radius, color);
+    img.save(path)?;
+    Ok(())
+}
+
+// --- INÍCIO DA ALTERAÇÃO: Nova função para desenhar linhas espessas ---
+fn draw_thick_line_segment_mut(
+    image: &mut RgbaImage,
+    start: (f32, f32),
+    end: (f32, f32),
+    thickness: f32,
+    color: Rgba<u8>,
+) {
+    let dx = end.0 - start.0;
+    let dy = end.1 - start.1;
+    let length = (dx * dx + dy * dy).sqrt();
+    if length < 1e-6 { return; }
+    
+    let nx = dx / length;
+    let ny = dy / length;
+    
+    let px = -ny;
+    let py = nx;
+
+    let half_thickness = thickness / 2.0;
+
+    let p1 = Point { x: (start.0 + px * half_thickness) as i32, y: (start.1 + py * half_thickness) as i32 };
+    let p2 = Point { x: (end.0 + px * half_thickness) as i32, y: (end.1 + py * half_thickness) as i32 };
+    let p3 = Point { x: (end.0 - px * half_thickness) as i32, y: (end.1 - py * half_thickness) as i32 };
+    let p4 = Point { x: (start.0 - px * half_thickness) as i32, y: (start.1 - py * half_thickness) as i32 };
+
+    draw_polygon_mut(image, &[p1, p2, p3, p4], color);
+}
+// --- FIM DA ALTERAÇÃO ---
+
+pub fn generate_track_map_image(
+    gpx: &Gpx, 
+    width: u32, 
+    height: u32, 
+    path: &str, 
+    background_color: Rgba<u8>, 
+    line_color: Rgba<u8>,
+    line_thickness: f32, // Parâmetro para a espessura
+) -> Result<(), Box<dyn Error>> {
+    let points: Vec<_> = gpx.tracks.iter()
+        .flat_map(|t| t.segments.iter())
+        .flat_map(|s| s.points.iter())
+        .map(|p| p.point())
+        .collect();
+
+    if points.is_empty() {
+        return Err("GPX não contém pontos para desenhar.".into());
+    }
+
+    let (min_lon, max_lon, min_lat, max_lat) = points.iter().fold(
+        (points[0].x(), points[0].x(), points[0].y(), points[0].y()),
+        |(min_x, max_x, min_y, max_y), p| {
+            (min_x.min(p.x()), max_x.max(p.x()), min_y.min(p.y()), max_y.max(p.y()))
+        }
+    );
+
+    let mut img = RgbaImage::from_pixel(width, height, background_color);
+    
+    let padding = 20.0;
+    let map_width = width as f64 - 2.0 * padding;
+    let map_height = height as f64 - 2.0 * padding;
+
+    let lon_range = max_lon - min_lon;
+    let lat_range = max_lat - min_lat;
+    
+    let scale_x = if lon_range.abs() > 1e-9 { map_width / lon_range } else { 0.0 };
+    let scale_y = if lat_range.abs() > 1e-9 { map_height / lat_range } else { 0.0 };
+    let scale = scale_x.min(scale_y);
+
+    let get_pixel_coords = |lon: f64, lat: f64| -> (f32, f32) {
+        let x = padding + (lon - min_lon) * scale;
+        let y = padding + (max_lat - lat) * scale;
+        (x as f32, y as f32)
+    };
+
+    for track in &gpx.tracks {
+        for segment in &track.segments {
+            for pair in segment.points.windows(2) {
+                let p1 = pair[0].point();
+                let p2 = pair[1].point();
+                
+                let (x1, y1) = get_pixel_coords(p1.x(), p1.y());
+                let (x2, y2) = get_pixel_coords(p2.x(), p2.y());
+                
+                // --- INÍCIO DA ALTERAÇÃO: Usar a nova função de linha espessa ---
+                draw_thick_line_segment_mut(&mut img, (x1, y1), (x2, y2), line_thickness, line_color);
+                // --- FIM DA ALTERAÇÃO ---
+            }
+        }
+    }
+    
+    img.save(path)?;
     Ok(())
 }
 
