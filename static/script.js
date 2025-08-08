@@ -20,8 +20,8 @@ const positionSection = document.getElementById('position-section');
 // --- INÍCIO DA ALTERAÇÃO: Seletores para os novos controles ---
 const speedoCheckbox = document.getElementById('add-speedo-overlay');
 const trackCheckbox = document.getElementById('add-track-overlay');
-const speedoPositionContainer = document.getElementById('speedo-position-container');
-const trackPositionContainer = document.getElementById('track-position-container');
+const speedoPositionGrid = document.getElementById('speedo-position-grid');
+const trackPositionGrid = document.getElementById('track-position-grid');
 const speedoPositionRadios = document.querySelectorAll('input[name="speedoPosition"]');
 const trackPositionRadios = document.querySelectorAll('input[name="trackPosition"]');
 // --- FIM DA ALTERAÇÃO ---
@@ -40,12 +40,12 @@ generateBtn.addEventListener('click', handleGenerate);
 
 // --- INÍCIO DA ALTERAÇÃO: Listeners para os novos controles ---
 speedoCheckbox.addEventListener('change', () => {
-    speedoPositionContainer.classList.toggle('hidden', !speedoCheckbox.checked);
+    speedoPositionGrid.classList.toggle('hidden', !speedoCheckbox.checked);
     updatePositionControls();
 });
 
 trackCheckbox.addEventListener('change', () => {
-    trackPositionContainer.classList.toggle('hidden', !trackCheckbox.checked);
+    trackPositionGrid.classList.toggle('hidden', !trackCheckbox.checked);
     updatePositionControls();
 });
 
@@ -54,22 +54,18 @@ trackPositionRadios.forEach(radio => radio.addEventListener('change', updatePosi
 // --- FIM DA ALTERAÇÃO ---
 
 
-// --- INÍCIO DA ALTERAÇÃO: Nova função para sincronizar os controles de posição ---
 function updatePositionControls() {
     const speedoPos = speedoCheckbox.checked ? document.querySelector('input[name="speedoPosition"]:checked').value : null;
     const trackPos = trackCheckbox.checked ? document.querySelector('input[name="trackPosition"]:checked').value : null;
 
-    // Habilita/desabilita as opções do mapa com base na seleção do velocímetro
     trackPositionRadios.forEach(radio => {
         radio.disabled = (radio.value === speedoPos);
     });
 
-    // Habilita/desabilita as opções do velocímetro com base na seleção do mapa
     speedoPositionRadios.forEach(radio => {
         radio.disabled = (radio.value === trackPos);
     });
 }
-// --- FIM DA ALTERAÇÃO ---
 
 async function fetchAndApplySuggestion() {
     if (!gpxFile || !videoFile) return;
@@ -170,8 +166,8 @@ function selectSyncPoint(point, isSuggestion) {
     syncPointInfo.textContent = `Ponto selecionado (${isSuggestion ? 'sugestão' : 'manual'}): ${pointTime} (UTC)`; 
     if (videoFile) { 
         positionSection.style.display = 'block'; 
-        generateBtn.style.display = 'block';
-        updatePositionControls(); // Inicializa os controles de posição
+        generateBtn.style.display = 'flex';
+        updatePositionControls();
     } 
 }
 
@@ -194,7 +190,6 @@ function handleGenerate() {
     formData.append('videoFile', videoFile);
     formData.append('syncTimestamp', selectedSyncPoint.time.toISOString());
 
-    // --- INÍCIO DA ALTERAÇÃO: Enviar dados dos novos controles ---
     formData.append('addSpeedoOverlay', speedoCheckbox.checked);
     if (speedoCheckbox.checked) {
         formData.append('speedoPosition', document.querySelector('input[name="speedoPosition"]:checked').value);
@@ -204,7 +199,6 @@ function handleGenerate() {
     if (trackCheckbox.checked) {
         formData.append('trackPosition', document.querySelector('input[name="trackPosition"]:checked').value);
     }
-    // --- FIM DA ALTERAÇÃO ---
 
     const xhr = new XMLHttpRequest();
     xhr.open('POST', '/process', true);
