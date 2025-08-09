@@ -11,7 +11,7 @@ const translations = {
         'sync_point_selected': 'Point selected ({{type}}): {{time}} (UTC)', 'manual_type': 'manual', 'suggestion_type': 'suggestion', 'error_missing_files': 'Error: Please select both files and a sync point.',
         'uploading_files': 'Uploading files...', 'success_message': 'Success! Your video is ready.', 'server_error': 'Error: {{message}}', 'network_error': 'Network error while uploading files.',
         'settings_title': 'Advanced Settings', 'interpolation_label': 'Interpolation Precision Level', 'interpolation_desc': 'Lower value = more points = higher precision and slower processing.',
-        'terrain_label': '🏞️ Display Terrain Type', 'terrain_desc': 'Shows the terrain type (e.g., forest, urban) on a corner of the screen. Requires an internet connection.', 'fetching_terrain': 'Fetching terrain data...', 'unknown_terrain': 'Unknown Terrain'
+        'terrain_label_main': '🏞️ Terrain Type', 'terrain_desc': 'Displays the terrain type (e.g., forest, urban) as an overlay on the video. Requires an internet connection and increases processing time.'
     },
     'pt-BR': {
         'main_title': '🎬 Sincronização Interativa GPX + Vídeo',
@@ -24,7 +24,7 @@ const translations = {
         'sync_point_selected': 'Ponto selecionado ({{type}}): {{time}} (UTC)', 'manual_type': 'manual', 'suggestion_type': 'sugestão', 'error_missing_files': 'Erro: Por favor, selecione os dois ficheiros e um ponto de sincronização.',
         'uploading_files': 'A enviar ficheiros...', 'success_message': 'Sucesso! O seu vídeo está pronto.', 'server_error': 'Erro: {{message}}', 'network_error': 'Erro de rede ao enviar os ficheiros.',
         'settings_title': 'Configurações Avançadas', 'interpolation_label': 'Nível de Precisão da Interpolação', 'interpolation_desc': 'Menor valor = mais pontos = maior precisão e processamento mais lento.',
-        'terrain_label': '🏞️ Exibir Tipo de Terreno', 'terrain_desc': 'Exibe o tipo de terreno (ex: floresta, urbano) num canto do ecrã. Requer ligação à internet.', 'fetching_terrain': 'A obter dados do terreno...', 'unknown_terrain': 'Terreno Desconhecido'
+        'terrain_label_main': '🏞️ Tipo de Terreno', 'terrain_desc': 'Exibe o tipo de terreno (ex: floresta, urbano) como um overlay no vídeo. Requer ligação à internet e aumenta o tempo de processamento.'
     }
 };
 let currentLang = localStorage.getItem('lang') || 'pt-BR';
@@ -36,10 +36,9 @@ function setLanguage(lang) {
     
     document.querySelectorAll('[data-i18n]').forEach(el => {
         const key = el.getAttribute('data-i18n');
-        const hasChildElements = el.children.length > 0 && Array.from(el.children).some(child => child.nodeType === 1);
-        if (hasChildElements) {
-            const textNode = Array.from(el.childNodes).find(node => node.nodeType === Node.TEXT_NODE && node.textContent.trim().length > 0);
-            if(textNode) textNode.textContent = ` ${t(key)}`;
+        const span = el.querySelector('span');
+        if (span) {
+            span.textContent = t(key);
         } else {
             el.textContent = t(key);
         }
@@ -79,11 +78,11 @@ const closeModalBtn = document.getElementById('close-modal-btn');
 const interpolationSlider = document.getElementById('interpolation-slider');
 const interpolationValue = document.getElementById('interpolation-value');
 const terrainCheckbox = document.getElementById('add-terrain-overlay');
-const terrainDisplay = document.getElementById('terrain-display');
+const terrainPositionGrid = document.getElementById('terrain-position-grid');
+const terrainPositionRadios = document.querySelectorAll('input[name="terrainPosition"]');
 
 // Variáveis de estado
 let gpxFile = null, videoFile = null, selectedSyncPoint = null, map = null, trackLayer = null, userMarker = null, suggestionMarker = null, gpxDataPoints = [];
-let terrainData = {};
 
 // Inicialização e Event Listeners
 map = L.map('map').setView([0, 0], 2);
@@ -93,20 +92,16 @@ videoInput.addEventListener('change', handleVideoUpload);
 generateBtn.addEventListener('click', handleGenerate);
 speedoCheckbox.addEventListener('change', () => { speedoPositionGrid.classList.toggle('hidden', !speedoCheckbox.checked); updatePositionControls(); });
 trackCheckbox.addEventListener('change', () => { trackPositionGrid.classList.toggle('hidden', !trackCheckbox.checked); updatePositionControls(); });
+terrainCheckbox.addEventListener('change', () => { terrainPositionGrid.classList.toggle('hidden', !terrainCheckbox.checked); updatePositionControls(); });
 speedoPositionRadios.forEach(radio => radio.addEventListener('change', updatePositionControls));
 trackPositionRadios.forEach(radio => radio.addEventListener('change', updatePositionControls));
+terrainPositionRadios.forEach(radio => radio.addEventListener('change', updatePositionControls));
 document.getElementById('lang-pt').addEventListener('click', () => setLanguage('pt-BR'));
 document.getElementById('lang-en').addEventListener('click', () => setLanguage('en'));
 settingsBtn.addEventListener('click', () => settingsModal.classList.remove('hidden'));
 closeModalBtn.addEventListener('click', () => settingsModal.classList.add('hidden'));
 settingsModal.addEventListener('click', (e) => { if (e.target === settingsModal) { settingsModal.classList.add('hidden'); } });
 interpolationSlider.addEventListener('input', () => { interpolationValue.textContent = `${interpolationSlider.value}s`; });
-terrainCheckbox.addEventListener('change', () => {
-    if (terrainCheckbox.checked && Object.keys(terrainData).length === 0) {
-        fetchTerrainData();
-    }
-    terrainDisplay.classList.toggle('hidden', !terrainCheckbox.checked);
-});
 
 // --- INÍCIO DA CORREÇÃO: Definições dos ícones restauradas ---
 const suggestionIcon = L.icon({ iconUrl: 'data:image/svg+xml;base64,' + btoa(`<svg xmlns="http://www.w3.org/2000/svg" width="25" height="41" viewBox="0 0 25 41"><path fill="#2E8B57" stroke="#FFFFFF" stroke-width="1.5" d="M12.5 0C5.6 0 0 5.6 0 12.5c0 12.5 12.5 28.5 12.5 28.5s12.5-16 12.5-28.5C25 5.6 19.4 0 12.5 0z"/><circle fill="#FFFFFF" cx="12.5" cy="12.5" r="4"/></svg>`), iconSize: [25, 41], iconAnchor: [12, 41], popupAnchor: [1, -34] });
@@ -116,31 +111,11 @@ const userIcon = L.icon({ iconUrl: 'data:image/svg+xml;base64,' + btoa(`<svg xml
 function updatePositionControls() {
     const speedoPos = speedoCheckbox.checked ? document.querySelector('input[name="speedoPosition"]:checked').value : null;
     const trackPos = trackCheckbox.checked ? document.querySelector('input[name="trackPosition"]:checked').value : null;
-    trackPositionRadios.forEach(radio => { radio.disabled = (radio.value === speedoPos); });
-    speedoPositionRadios.forEach(radio => { radio.disabled = (radio.value === trackPos); });
-}
+    const terrainPos = terrainCheckbox.checked ? document.querySelector('input[name="terrainPosition"]:checked').value : null;
 
-async function fetchTerrainData() {
-    if (!gpxDataPoints || gpxDataPoints.length === 0 || !terrainCheckbox.checked) return;
-    statusDiv.textContent = t('fetching_terrain');
-    const sampleRate = Math.max(1, Math.floor(gpxDataPoints.length / 50));
-    const sampledPoints = gpxDataPoints.filter((_, index) => index % sampleRate === 0).map(p => ({ lat: p.lat, lon: p.lon, time: p.time.toISOString() }));
-    try {
-        const response = await fetch('/terrain', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ points: sampledPoints, lang: currentLang }) });
-        if (response.ok) {
-            terrainData = await response.json();
-            const firstKey = Object.keys(terrainData)[0];
-            if(firstKey) { updateTerrainDisplay(terrainData[firstKey]); }
-        } else { console.error('Failed to fetch terrain data'); }
-    } catch (error) { console.error('Error fetching terrain data:', error); } 
-    finally { statusDiv.textContent = t('suggestion_applied'); }
-}
-
-function updateTerrainDisplay(terrainType) {
-    if (terrainCheckbox.checked) {
-        terrainDisplay.textContent = `🏞️ ${terrainType || t('unknown_terrain')}`;
-        terrainDisplay.classList.remove('hidden');
-    }
+    speedoPositionRadios.forEach(radio => { radio.disabled = (radio.value === trackPos || radio.value === terrainPos); });
+    trackPositionRadios.forEach(radio => { radio.disabled = (radio.value === speedoPos || radio.value === terrainPos); });
+    terrainPositionRadios.forEach(radio => { radio.disabled = (radio.value === speedoPos || radio.value === trackPos); });
 }
 
 async function fetchAndApplySuggestion() {
@@ -211,7 +186,6 @@ function displayTrack(points) {
         }); 
         if (closestPoint) { selectSyncPoint(closestPoint, false); } 
     });
-    fetchTerrainData();
 }
 
 function selectSyncPoint(point, isSuggestion) { 
@@ -251,6 +225,8 @@ function handleGenerate() {
     if (speedoCheckbox.checked) { formData.append('speedoPosition', document.querySelector('input[name="speedoPosition"]:checked').value); }
     formData.append('addTrackOverlay', trackCheckbox.checked);
     if (trackCheckbox.checked) { formData.append('trackPosition', document.querySelector('input[name="trackPosition"]:checked').value); }
+    formData.append('addTerrainOverlay', terrainCheckbox.checked);
+    if (terrainCheckbox.checked) { formData.append('terrainPosition', document.querySelector('input[name="terrainPosition"]:checked').value); }
 
     const xhr = new XMLHttpRequest();
     xhr.open('POST', '/process', true);

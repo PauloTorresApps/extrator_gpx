@@ -29,15 +29,6 @@
                         <span id="interpolation-value">1s</span>
                     </div>
                 </div>
-                <!-- INÍCIO DA ALTERAÇÃO: Novo controle de terreno -->
-                <div class="setting-item">
-                    <div class="overlay-toggle">
-                        <input type="checkbox" id="add-terrain-overlay" name="addTerrainOverlay">
-                        <label for="add-terrain-overlay" data-i18n="terrain_label">🏞️ Exibir Tipo de Terreno</label>
-                    </div>
-                    <p data-i18n="terrain_desc">Exibe o tipo de terreno (ex: floresta, urbano) num canto do ecrã. Requer ligação à internet.</p>
-                </div>
-                <!-- FIM DA ALTERAÇÃO -->
             </div>
         </div>
         
@@ -49,7 +40,6 @@
         <h1 data-i18n="main_title">🎬 Sincronização Interativa GPX + Vídeo</h1>
         <p class="intro-text" data-i18n="intro_text">Carregue os seus ficheiros, selecione um ponto de sincronização no mapa e configure os overlays para gerar o seu vídeo final com telemetria.</p>
         
-        <!-- O resto do HTML permanece igual... -->
         <div class="section">
             <div class="section-title">
                 <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>
@@ -117,6 +107,18 @@
                         <label class="position-grid-cell"><input type="radio" name="trackPosition" value="bottom-right"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4 L20 20 M12 20 L20 20 L20 12"/></svg></label>
                     </div>
                 </fieldset>
+                <fieldset class="position-container">
+                    <div class="overlay-toggle">
+                        <input type="checkbox" id="add-terrain-overlay" name="addTerrainOverlay" checked>
+                        <label for="add-terrain-overlay" data-i18n="terrain_label_main">🏞️ Tipo de Terreno</label>
+                    </div>
+                    <div class="position-grid" id="terrain-position-grid">
+                        <label class="position-grid-cell"><input type="radio" name="terrainPosition" value="top-left"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 20 L4 4 M12 4 L4 4 L4 12"/></svg></label>
+                        <label class="position-grid-cell"><input type="radio" name="terrainPosition" value="top-right"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20 L20 4 M12 4 L20 4 L20 12"/></svg></label>
+                        <label class="position-grid-cell"><input type="radio" name="terrainPosition" value="bottom-left"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 4 L4 20 M12 20 L4 20 L4 12"/></svg></label>
+                        <label class="position-grid-cell"><input type="radio" name="terrainPosition" value="bottom-right" checked><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4 L20 20 M12 20 L20 20 L20 12"/></svg></label>
+                    </div>
+                </fieldset>
             </div>
         </div>
 
@@ -128,10 +130,6 @@
         <div id="status" data-i18n="status_initial">Selecione um ficheiro GPX para começar.</div>
         <div id="download-link"><a href="#" data-i18n="download_link">📥 Descarregar Vídeo Final</a></div>
         <div id="logs-container"><h3><span data-i18n="logs_title">📋 Logs do Processamento:</span></h3><pre id="logs"></pre></div>
-        
-        <!-- INÍCIO DA ALTERAÇÃO: Display para o tipo de terreno -->
-        <div id="terrain-display" class="terrain-display hidden"></div>
-        <!-- FIM DA ALTERAÇÃO -->
     </div>
 
     <script src="script.js" defer></script>
