@@ -4,7 +4,7 @@ const translations = {
         'main_title': '🎬 Interactive GPX + Video Sync',
         'intro_text': 'Upload your files, select a sync point on the map, and configure the overlays to generate your final video with telemetry.',
         'step1_title': 'Select Files', 'gpx_file_label': 'GPX File', 'choose_gpx': 'Choose GPX', 'no_gpx_selected': 'No file selected', 'video_file_label': 'Video File', 'choose_video': 'Choose Video', 'select_gpx_first': 'Select a GPX file first',
-        'step2_title': 'Select Sync Point', 'map_click_prompt': '🎯 Click a point on the map to set it as the sync start.', 'step3_title': 'Positioning', 'speedo_label': '⚙️ Speedometer', 'map_label': '🗺️ Track Map', 'stats_label': '📊 Statistics',
+        'step2_title': 'Select Sync Point', 'map_click_prompt': '🎯 Click a point on the map to set it as the sync start.', 'step3_title': 'Positioning', 'speedo_label': '⏱️ Speedometer', 'map_label': '🗺️ Track Map', 'stats_label': '📊 Statistics',
         'generate_button': 'Confirm and Generate Video', 'status_initial': 'Select a GPX file to begin.', 'download_link': '📥 Download Final Video', 'logs_title': '📋 Processing Logs:',
         'gpx_loaded': 'GPX file loaded. Please select the video file.', 'can_select_video': 'You can now select the video file', 'analyzing_files': 'Analyzing files to suggest sync point and track...', 'high_precision_track_loaded': 'High-precision track loaded from server.',
         'suggestion_applied': 'Automatic suggestion applied! You can adjust it on the map if needed.', 'suggestion_error': 'Could not get suggestion: {{message}}. Please select a point manually.', 'suggestion_comm_error': 'Communication error while getting suggestion. Please select a point manually.',
@@ -171,7 +171,7 @@ class InlineOverlayManager {
         };
         
         this.overlayConfig = {
-            speedometer: { icon: '💨', name: 'Velocímetro' }, // Use an emoji for consistency in the label
+            speedometer: { icon: '⏱️', name: 'Velocímetro' },
             map: { icon: '🗺️', name: 'Mapa' },
             stats: { icon: '📊', name: 'Estatísticas' }
         };
@@ -199,13 +199,72 @@ class InlineOverlayManager {
             <div class="overlay-images-group">
                 <div class="overlay-image speedometer-img" data-overlay="speedometer" title="${t('speedo_hint')}">
                     <div class="active-indicator"></div><div class="position-indicator"></div>
-                    <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#bb86fc" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21.25 12a9.25 9.25 0 1 1-18.5 0 9.25 9.25 0 0 1 18.5 0z"/><path d="M12 12l-6 2"/><path d="M12 21.25V12"/></svg>
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 105" width="200" height="105">
+  <defs>
+    <style>
+      .gauge-arc {
+        fill: none;
+        stroke-width: 34;
+      }
+    </style>
+  </defs>
+
+  <g transform="translate(0, -5)">
+    <path d="M 20 100 A 80 80 0 0 1 58.78 41.22" class="gauge-arc" stroke="#d9534f"/>
+    
+    <path d="M 58.78 41.22 A 80 80 0 0 1 141.22 41.22" class="gauge-arc" stroke="#f0ad4e"/>
+    
+    <path d="M 141.22 41.22 A 80 80 0 0 1 180 100" class="gauge-arc" stroke="#5bc0de"/>
+    
+    <path d="M 167.08 68.35 A 80 80 0 0 1 180 100" class="gauge-arc" stroke="#5cb85c"/>
+
+    <path d="M100,102 L150,60 C155,80 145,100 130,100 L100,102 Z" fill="#4e5d6c" transform="rotate(-45 100 100)"/>
+  </g>
+</svg>
                 </div>
                 <div class="overlay-image map-img" data-overlay="map" title="${t('map_hint')}">
-                    <div class="active-indicator"></div><div class="position-indicator"></div>🗺️
+                    <div class="active-indicator"></div><div class="position-indicator"></div><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 125">
+  <g id="mapa">
+    <path fill="#79D279" d="M50 47.5L5 80v15l45 15 45-15V80l-45-32.5z"/>
+    <path fill="#3EAD3E" d="M50 47.5L95 80V65L50 47.5z"/>
+    <path fill="#81B9EF" d="M5 80l45 15V65L5 80z"/>
+    <path fill="#3EAD3E" d="M5 65v15l45-17.5V47.5L5 65z"/>
+    <path fill="#FFD159" d="M50 110l45-30-45-15-45 15z"/>
+    <path fill="#FFC10A" d="M50 65v45l45-30V65l-45-17.5V65z"/>
+  </g>
+  
+  <g id="pino">
+    <path fill="#EA4335" d="M50 0C32.1 0 17.5 14.6 17.5 32.5S50 80 50 80s32.5-29.6 32.5-47.5S67.9 0 50 0z"/>
+    <path fill="#C5372B" d="M50 0C32.1 0 17.5 14.6 17.5 32.5S50 80 50 80V0z"/>
+  </g>
+</svg>
                 </div>
                 <div class="overlay-image stats-img" data-overlay="stats" title="${t('stats_hint')}">
-                    <div class="active-indicator"></div><div class="position-indicator"></div>📊
+                    <div class="active-indicator"></div><div class="position-indicator"></div><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 110 110" width="110" height="110">
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="currentColor"/>
+    </marker>
+  </defs>
+
+  <g id="eixos" stroke="#546E7A" stroke-width="4" stroke-linecap="round">
+    <path d="M 15 105 L 15 5" marker-end="url(#arrow)" />
+    <path d="M 10 100 L 105 100" marker-end="url(#arrow)" />
+  </g>
+
+  <g id="barras" stroke-width="1" stroke="rgba(0,0,0,0.1)">
+    <rect x="22" y="60" width="14" height="40" rx="2" fill="#42A5F5"/>
+    <rect x="40" y="70" width="14" height="30" rx="2" fill="#66BB6A"/>
+    <rect x="58" y="50" width="14" height="50" rx="2" fill="#EF5350"/>
+    <rect x="76" y="30" width="14" height="70" rx="2" fill="#FFCA28"/>
+  </g>
+  
+  <g id="linhas" fill="none" stroke-width="4.5" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M 18,53 C 40,47, 55,52, 98,22" stroke="#E53935" marker-end="url(#arrow)"/>
+    <path d="M 18,73 C 40,63, 60,66, 98,53" stroke="#43A047" marker-end="url(#arrow)"/>
+    <path d="M 25,83 C 38,43, 50,65, 80,18" stroke="#1E88E5" marker-end="url(#arrow)"/>
+  </g>
+</svg>
                 </div>
             </div>
             <div class="overlay-separator"></div>
