@@ -10,7 +10,10 @@ const translations = {
         'suggestion_applied': 'Automatic suggestion applied! You can adjust it on the map if needed.', 'suggestion_error': 'Could not get suggestion: {{message}}. Please select a point manually.', 'suggestion_comm_error': 'Communication error while getting suggestion. Please select a point manually.',
         'sync_point_selected': 'Point selected ({{type}}): {{time}} (UTC)', 'manual_type': 'manual', 'suggestion_type': 'suggestion', 'error_missing_files': 'Error: Please select both files and a sync point.',
         'uploading_files': 'Uploading files...', 'success_message': 'Success! Your video is ready.', 'server_error': 'Error: {{message}}', 'network_error': 'Network error while uploading files.',
-        'settings_title': 'Advanced Settings', 'interpolation_label': 'Interpolation Precision Level', 'interpolation_desc': 'Lower value = more points = higher precision and slower processing.'
+        'settings_title': 'Advanced Settings', 'interpolation_label': 'Interpolation Precision Level', 'interpolation_desc': 'Lower value = more points = higher precision and slower processing.',
+        'speedo_hint': 'Displays a speedometer with the current speed on the video.',
+        'map_hint': 'Shows a mini-map with the traveled path and current position.',
+        'stats_hint': 'Adds a panel with statistics like distance, time, and elevation.'
     },
     'pt-BR': {
         'main_title': '🎬 Sincronização Interativa GPX + Vídeo',
@@ -22,7 +25,10 @@ const translations = {
         'suggestion_applied': 'Sugestão automática aplicada! Pode ajustar no mapa se necessário.', 'suggestion_error': 'Não foi possível obter sugestão: {{message}}. Selecione um ponto manualmente.', 'suggestion_comm_error': 'Erro de comunicação ao obter sugestão. Selecione um ponto manualmente.',
         'sync_point_selected': 'Ponto selecionado ({{type}}): {{time}} (UTC)', 'manual_type': 'manual', 'suggestion_type': 'sugestão', 'error_missing_files': 'Erro: Por favor, selecione os dois ficheiros e um ponto de sincronização.',
         'uploading_files': 'A enviar ficheiros...', 'success_message': 'Sucesso! O seu vídeo está pronto.', 'server_error': 'Erro: {{message}}', 'network_error': 'Erro de rede ao enviar os ficheiros.',
-        'settings_title': 'Configurações Avançadas', 'interpolation_label': 'Nível de Precisão da Interpolação', 'interpolation_desc': 'Menor valor = mais pontos = maior precisão e processamento mais lento.'
+        'settings_title': 'Configurações Avançadas', 'interpolation_label': 'Nível de Precisão da Interpolação', 'interpolation_desc': 'Menor valor = mais pontos = maior precisão e processamento mais lento.',
+        'speedo_hint': 'Exibe um velocímetro com a velocidade atual no vídeo.',
+        'map_hint': 'Mostra um mini-mapa com o trajeto percorrido e a posição atual.',
+        'stats_hint': 'Adiciona um painel com estatísticas como distância, tempo e elevação.'
     }
 };
 let currentLang = localStorage.getItem('lang') || 'pt-BR';
@@ -165,7 +171,7 @@ class InlineOverlayManager {
         };
         
         this.overlayConfig = {
-            speedometer: { icon: '⚙️', name: 'Velocímetro' },
+            speedometer: { icon: '💨', name: 'Velocímetro' }, // Use an emoji for consistency in the label
             map: { icon: '🗺️', name: 'Mapa' },
             stats: { icon: '📊', name: 'Estatísticas' }
         };
@@ -191,13 +197,14 @@ class InlineOverlayManager {
         
         container.innerHTML = `
             <div class="overlay-images-group">
-                <div class="overlay-image speedometer-img" data-overlay="speedometer">
-                    <div class="active-indicator"></div><div class="position-indicator"></div>⚙️
+                <div class="overlay-image speedometer-img" data-overlay="speedometer" title="${t('speedo_hint')}">
+                    <div class="active-indicator"></div><div class="position-indicator"></div>
+                    <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#bb86fc" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21.25 12a9.25 9.25 0 1 1-18.5 0 9.25 9.25 0 0 1 18.5 0z"/><path d="M12 12l-6 2"/><path d="M12 21.25V12"/></svg>
                 </div>
-                <div class="overlay-image map-img" data-overlay="map">
+                <div class="overlay-image map-img" data-overlay="map" title="${t('map_hint')}">
                     <div class="active-indicator"></div><div class="position-indicator"></div>🗺️
                 </div>
-                <div class="overlay-image stats-img" data-overlay="stats">
+                <div class="overlay-image stats-img" data-overlay="stats" title="${t('stats_hint')}">
                     <div class="active-indicator"></div><div class="position-indicator"></div>📊
                 </div>
             </div>
