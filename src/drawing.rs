@@ -5,6 +5,7 @@ use imageproc::point::Point;
 use imageproc::drawing::{draw_polygon_mut, draw_filled_circle_mut, draw_line_segment_mut, draw_text_mut};
 use rusttype::{Font, Scale};
 use gpx::Gpx;
+use chrono::{DateTime, Utc};
 
 pub fn generate_speedometer_image(speed_kmh: f64, bearing: f64, g_force: f64, elevation: f64, output_path: &str, lang: &str) -> Result<(), Box<dyn Error>> {
     const SCALE_FACTOR: u32 = 4;
@@ -56,7 +57,7 @@ pub fn generate_speedometer_image(speed_kmh: f64, bearing: f64, g_force: f64, el
         }
     }
     
-    // --- INÍCIO DA ALTERAÇÃO: Bússola internacionalizada ---
+    // Bússola internacionalizada
     let (east_label, west_label) = if lang == "en" { ("E", "W") } else { ("L", "O") };
     let compass_radius = 40.0 * SCALE_FACTOR as f32;
     let bearing_rad = bearing.to_radians() as f32;
@@ -64,7 +65,6 @@ pub fn generate_speedometer_image(speed_kmh: f64, bearing: f64, g_force: f64, el
     draw_centered_text_mut(&mut img, white, CENTER.0, CENTER.1 + (compass_radius + 10.0 * SCALE_FACTOR as f32) as i32, scale_text, &font_regular, "S");
     draw_centered_text_mut(&mut img, white, CENTER.0 + (compass_radius + 10.0 * SCALE_FACTOR as f32) as i32, CENTER.1, scale_text, &font_regular, east_label);
     draw_centered_text_mut(&mut img, white, CENTER.0 - (compass_radius + 10.0 * SCALE_FACTOR as f32) as i32, CENTER.1, scale_text, &font_regular, west_label);
-    // --- FIM DA ALTERAÇÃO ---
 
     let p_n = Point { x: CENTER.0, y: CENTER.1 - compass_radius as i32 };
     let p_s = Point { x: CENTER.0, y: CENTER.1 + (15 * SCALE_FACTOR as i32) };
@@ -107,6 +107,62 @@ pub fn generate_speedometer_image(speed_kmh: f64, bearing: f64, g_force: f64, el
     );
 
     final_img.save(output_path)?;
+    Ok(())
+}
+
+// Nova função para gerar overlay de estatísticas
+pub fn generate_stats_image(
+    distance_km: f64,
+    altitude_m: f64,
+    elevation_gain_m: f64,
+    current_time: DateTime<Utc>,
+    output_path: &str,
+    lang: &str,
+) -> Result<(), Box<dyn Error>> {
+    const WIDTH: u32 = 220;
+    const HEIGHT: u32 = 250;
+    
+    let mut img = RgbaImage::new(WIDTH, HEIGHT);
+    
+    // Fundo transparente
+    for pixel in img.pixels_mut() {
+        *pixel = Rgba([0, 0, 0, 0]);
+    }
+    
+    let white = Rgba([255, 255, 255, 255]);
+    
+    let font_data_bold = include_bytes!("../DejaVuSans-Bold.ttf");
+    let font_bold = Font::try_from_bytes(&font_data_bold[..]).ok_or("Falha ao carregar a fonte em negrito")?;
+    
+    let scale_label = Scale::uniform(16.0);  // Aumentado de 14.0 para 16.0
+    let scale_value = Scale::uniform(28.0);  // Aumentado de 24.0 para 28.0
+    
+    let y_start = 15;
+    let line_height = 60;
+    
+    // Distância
+    let distance_label = if lang == "en" { "DISTANCE" } else { "DISTÂNCIA" };
+    let distance_value_unit = format!("{:.1} KM", distance_km);
+    draw_text_mut(&mut img, white, 10, y_start, scale_label, &font_bold, distance_label);
+    draw_text_mut(&mut img, white, 10, y_start + 20, scale_value, &font_bold, &distance_value_unit);
+    
+    // Altitude
+    let altitude_label = if lang == "en" { "ALTITUDE" } else { "ALTITUDE" };
+    let altitude_value_unit = format!("{:.0} M", altitude_m);
+    draw_text_mut(&mut img, white, 10, y_start + line_height, scale_label, &font_bold, altitude_label);
+    draw_text_mut(&mut img, white, 10, y_start + line_height + 20, scale_value, &font_bold, &altitude_value_unit);
+    
+    // Ganho de elevação
+    let elevation_gain_label = if lang == "en" { "ELEVATION GAIN" } else { "GANHO DE ELEVAÇÃO" };
+    let elevation_gain_value_unit = format!("{:.0} M", elevation_gain_m);
+    draw_text_mut(&mut img, white, 10, y_start + line_height * 2, scale_label, &font_bold, elevation_gain_label);
+    draw_text_mut(&mut img, white, 10, y_start + line_height * 2 + 20, scale_value, &font_bold, &elevation_gain_value_unit);
+    
+    // Horário
+    let time_text = current_time.format("%H:%M %p").to_string();
+    draw_text_mut(&mut img, white, 10, y_start + line_height * 3 + 5, scale_value, &font_bold, &time_text);
+    
+    img.save(output_path)?;
     Ok(())
 }
 

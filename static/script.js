@@ -1,10 +1,10 @@
-// --- Seção de Tradução (sem alterações) ---
+// --- Seção de Tradução (com adição do overlay de Stats) ---
 const translations = {
     'en': {
         'main_title': '🎬 Interactive GPX + Video Sync',
         'intro_text': 'Upload your files, select a sync point on the map, and configure the overlays to generate your final video with telemetry.',
         'step1_title': 'Select Files', 'gpx_file_label': 'GPX File', 'choose_gpx': 'Choose GPX', 'no_gpx_selected': 'No file selected', 'video_file_label': 'Video File', 'choose_video': 'Choose Video', 'select_gpx_first': 'Select a GPX file first',
-        'step2_title': 'Select Sync Point', 'map_click_prompt': '🎯 Click a point on the map to set it as the sync start.', 'step3_title': 'Positioning', 'speedo_label': '⚙️ Speedometer', 'map_label': '🗺️ Track Map',
+        'step2_title': 'Select Sync Point', 'map_click_prompt': '🎯 Click a point on the map to set it as the sync start.', 'step3_title': 'Positioning', 'speedo_label': '⚙️ Speedometer', 'map_label': '🗺️ Track Map', 'stats_label': '📊 Statistics',
         'generate_button': 'Confirm and Generate Video', 'status_initial': 'Select a GPX file to begin.', 'download_link': '📥 Download Final Video', 'logs_title': '📋 Processing Logs:',
         'gpx_loaded': 'GPX file loaded. Please select the video file.', 'can_select_video': 'You can now select the video file', 'analyzing_files': 'Analyzing files to suggest sync point and track...', 'high_precision_track_loaded': 'High-precision track loaded from server.',
         'suggestion_applied': 'Automatic suggestion applied! You can adjust it on the map if needed.', 'suggestion_error': 'Could not get suggestion: {{message}}. Please select a point manually.', 'suggestion_comm_error': 'Communication error while getting suggestion. Please select a point manually.',
@@ -16,7 +16,7 @@ const translations = {
         'main_title': '🎬 Sincronização Interativa GPX + Vídeo',
         'intro_text': 'Carregue os seus ficheiros, selecione um ponto de sincronização no mapa e configure os overlays para gerar o seu vídeo final com telemetria.',
         'step1_title': 'Selecionar Ficheiros', 'gpx_file_label': 'Ficheiro GPX', 'choose_gpx': 'Escolher GPX', 'no_gpx_selected': 'Nenhum ficheiro selecionado', 'video_file_label': 'Ficheiro de Vídeo', 'choose_video': 'Escolher Vídeo', 'select_gpx_first': 'Selecione um ficheiro GPX primeiro',
-        'step2_title': 'Selecionar Ponto de Sincronização', 'map_click_prompt': '🎯 Clique num ponto no mapa para o definir como o início da sincronização.', 'step3_title': 'Posicionamento', 'speedo_label': '⚙️ Velocímetro', 'map_label': '🗺️ Mapa do Trajeto',
+        'step2_title': 'Selecionar Ponto de Sincronização', 'map_click_prompt': '🎯 Clique num ponto no mapa para o definir como o início da sincronização.', 'step3_title': 'Posicionamento', 'speedo_label': '⚙️ Velocímetro', 'map_label': '🗺️ Mapa do Trajeto', 'stats_label': '📊 Estatísticas',
         'generate_button': 'Confirmar e Gerar Vídeo', 'status_initial': 'Selecione um ficheiro GPX para começar.', 'download_link': '📥 Descarregar Vídeo Final', 'logs_title': '📋 Logs do Processamento:',
         'gpx_loaded': 'Ficheiro GPX carregado. Selecione o ficheiro de vídeo.', 'can_select_video': 'Agora pode selecionar o ficheiro de vídeo', 'analyzing_files': 'Analisando ficheiros para sugerir ponto e percurso...', 'high_precision_track_loaded': 'Percurso de alta precisão carregado do servidor.',
         'suggestion_applied': 'Sugestão automática aplicada! Pode ajustar no mapa se necessário.', 'suggestion_error': 'Não foi possível obter sugestão: {{message}}. Selecione um ponto manualmente.', 'suggestion_comm_error': 'Erro de comunicação ao obter sugestão. Selecione um ponto manualmente.',
@@ -65,18 +65,20 @@ const trackInfoDiv = document.getElementById('track-info');
 const positionSection = document.getElementById('position-section');
 const speedoCheckbox = document.getElementById('add-speedo-overlay');
 const trackCheckbox = document.getElementById('add-track-overlay');
+const statsCheckbox = document.getElementById('add-stats-overlay');
 const speedoPositionGrid = document.getElementById('speedo-position-grid');
 const trackPositionGrid = document.getElementById('track-position-grid');
+const statsPositionGrid = document.getElementById('stats-position-grid');
 const speedoPositionRadios = document.querySelectorAll('input[name="speedoPosition"]');
 const trackPositionRadios = document.querySelectorAll('input[name="trackPosition"]');
+const statsPositionRadios = document.querySelectorAll('input[name="statsPosition"]');
 
-// --- INÍCIO DA ALTERAÇÃO: Seletores para o Modal ---
+// Seletores para o Modal
 const settingsBtn = document.getElementById('settings-btn');
 const settingsModal = document.getElementById('settings-modal');
 const closeModalBtn = document.getElementById('close-modal-btn');
 const interpolationSlider = document.getElementById('interpolation-slider');
 const interpolationValue = document.getElementById('interpolation-value');
-// --- FIM DA ALTERAÇÃO ---
 
 // Variáveis de estado
 let gpxFile = null, videoFile = null, selectedSyncPoint = null, map = null, trackLayer = null, userMarker = null, suggestionMarker = null, gpxDataPoints = [];
@@ -91,23 +93,35 @@ videoInput.addEventListener('change', handleVideoUpload);
 generateBtn.addEventListener('click', handleGenerate);
 speedoCheckbox.addEventListener('change', () => { speedoPositionGrid.classList.toggle('hidden', !speedoCheckbox.checked); updatePositionControls(); });
 trackCheckbox.addEventListener('change', () => { trackPositionGrid.classList.toggle('hidden', !trackCheckbox.checked); updatePositionControls(); });
+statsCheckbox.addEventListener('change', () => { statsPositionGrid.classList.toggle('hidden', !statsCheckbox.checked); updatePositionControls(); });
 speedoPositionRadios.forEach(radio => radio.addEventListener('change', updatePositionControls));
 trackPositionRadios.forEach(radio => radio.addEventListener('change', updatePositionControls));
+statsPositionRadios.forEach(radio => radio.addEventListener('change', updatePositionControls));
 document.getElementById('lang-pt').addEventListener('click', () => setLanguage('pt-BR'));
 document.getElementById('lang-en').addEventListener('click', () => setLanguage('en'));
 
-// --- INÍCIO DA ALTERAÇÃO: Event Listeners do Modal ---
+// Event Listeners do Modal
 settingsBtn.addEventListener('click', () => settingsModal.classList.remove('hidden'));
 closeModalBtn.addEventListener('click', () => settingsModal.classList.add('hidden'));
 settingsModal.addEventListener('click', (e) => { if (e.target === settingsModal) { settingsModal.classList.add('hidden'); } });
 interpolationSlider.addEventListener('input', () => { interpolationValue.textContent = `${interpolationSlider.value}s`; });
-// --- FIM DA ALTERAÇÃO ---
 
 function updatePositionControls() {
     const speedoPos = speedoCheckbox.checked ? document.querySelector('input[name="speedoPosition"]:checked').value : null;
     const trackPos = trackCheckbox.checked ? document.querySelector('input[name="trackPosition"]:checked').value : null;
-    trackPositionRadios.forEach(radio => { radio.disabled = (radio.value === speedoPos); });
-    speedoPositionRadios.forEach(radio => { radio.disabled = (radio.value === trackPos); });
+    const statsPos = statsCheckbox.checked ? document.querySelector('input[name="statsPosition"]:checked').value : null;
+    
+    const usedPositions = [speedoPos, trackPos, statsPos].filter(pos => pos !== null);
+    
+    trackPositionRadios.forEach(radio => { 
+        radio.disabled = usedPositions.includes(radio.value) && radio.value !== trackPos; 
+    });
+    speedoPositionRadios.forEach(radio => { 
+        radio.disabled = usedPositions.includes(radio.value) && radio.value !== speedoPos; 
+    });
+    statsPositionRadios.forEach(radio => { 
+        radio.disabled = usedPositions.includes(radio.value) && radio.value !== statsPos; 
+    });
 }
 
 async function fetchAndApplySuggestion() {
@@ -116,9 +130,7 @@ async function fetchAndApplySuggestion() {
     const formData = new FormData();
     formData.append('gpxFile', gpxFile);
     formData.append('videoFile', videoFile);
-    // --- INÍCIO DA ALTERAÇÃO: Enviar o nível de interpolação para sugestão ---
     formData.append('interpolationLevel', interpolationSlider.value);
-    // --- FIM DA ALTERAÇÃO ---
     try {
         const response = await fetch('/suggest', { method: 'POST', body: formData });
         const data = await response.json();
@@ -164,14 +176,14 @@ function handleGenerate() {
     formData.append('videoFile', videoFile);
     formData.append('syncTimestamp', selectedSyncPoint.time.toISOString());
     formData.append('lang', currentLang);
-    // --- INÍCIO DA ALTERAÇÃO: Enviar o nível de interpolação ---
     formData.append('interpolationLevel', interpolationSlider.value);
-    // --- FIM DA ALTERAÇÃO ---
 
     formData.append('addSpeedoOverlay', speedoCheckbox.checked);
     if (speedoCheckbox.checked) { formData.append('speedoPosition', document.querySelector('input[name="speedoPosition"]:checked').value); }
     formData.append('addTrackOverlay', trackCheckbox.checked);
     if (trackCheckbox.checked) { formData.append('trackPosition', document.querySelector('input[name="trackPosition"]:checked').value); }
+    formData.append('addStatsOverlay', statsCheckbox.checked);
+    if (statsCheckbox.checked) { formData.append('statsPosition', document.querySelector('input[name="statsPosition"]:checked').value); }
 
     const xhr = new XMLHttpRequest();
     xhr.open('POST', '/process', true);

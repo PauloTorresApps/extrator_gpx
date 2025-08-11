@@ -13,7 +13,6 @@
 </head>
 <body>
     <div id="app">
-        <!-- INÍCIO DA ALTERAÇÃO: Ícone de Configurações e Modal -->
         <button id="settings-btn" class="settings-btn" aria-label="Abrir configurações">
             <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
         </button>
@@ -32,7 +31,6 @@
                 </div>
             </div>
         </div>
-        <!-- FIM DA ALTERAÇÃO -->
 
         <div class="lang-switcher">
             <button id="lang-pt" class="active">🇧🇷 PT-BR</button>
@@ -107,6 +105,18 @@
                         <label class="position-grid-cell"><input type="radio" name="trackPosition" value="top-right" checked><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20 L20 4 M12 4 L20 4 L20 12"/></svg></label>
                         <label class="position-grid-cell"><input type="radio" name="trackPosition" value="bottom-left"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 4 L4 20 M12 20 L4 20 L4 12"/></svg></label>
                         <label class="position-grid-cell"><input type="radio" name="trackPosition" value="bottom-right"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4 L20 20 M12 20 L20 20 L20 12"/></svg></label>
+                    </div>
+                </fieldset>
+                <fieldset class="position-container">
+                    <div class="overlay-toggle">
+                        <input type="checkbox" id="add-stats-overlay" name="addStatsOverlay">
+                        <label for="add-stats-overlay" data-i18n="stats_label">📊 Estatísticas</label>
+                    </div>
+                    <div class="position-grid hidden" id="stats-position-grid">
+                        <label class="position-grid-cell"><input type="radio" name="statsPosition" value="top-left"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 20 L4 4 M12 4 L4 4 L4 12"/></svg></label>
+                        <label class="position-grid-cell"><input type="radio" name="statsPosition" value="top-right"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20 L20 4 M12 4 L20 4 L20 12"/></svg></label>
+                        <label class="position-grid-cell"><input type="radio" name="statsPosition" value="bottom-left"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 4 L4 20 M12 20 L4 20 L4 12"/></svg></label>
+                        <label class="position-grid-cell"><input type="radio" name="statsPosition" value="bottom-right" checked><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4 L20 20 M12 20 L20 20 L20 12"/></svg></label>
                     </div>
                 </fieldset>
             </div>

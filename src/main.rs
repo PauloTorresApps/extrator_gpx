@@ -74,6 +74,8 @@ struct ProcessParams {
     speedo_position: Option<String>,
     add_track_overlay: bool,
     track_position: Option<String>,
+    add_stats_overlay: bool,
+    stats_position: Option<String>,
     lang: String,
     interpolation_level: i64,
 }
@@ -113,6 +115,8 @@ async fn process_files(mut multipart: Multipart) -> impl IntoResponse {
                 "speedoPosition" => params.speedo_position = Some(value),
                 "addTrackOverlay" => params.add_track_overlay = value.parse().unwrap_or(false),
                 "trackPosition" => params.track_position = Some(value),
+                "addStatsOverlay" => params.add_stats_overlay = value.parse().unwrap_or(false),
+                "statsPosition" => params.stats_position = Some(value),
                 "lang" => params.lang = value,
                 "interpolationLevel" => params.interpolation_level = value.parse().unwrap_or(1),
                 _ => {}
@@ -120,7 +124,6 @@ async fn process_files(mut multipart: Multipart) -> impl IntoResponse {
         }
     }
 
-    // --- INÍCIO DA CORREÇÃO: Removido o bloco de código duplicado ---
     if let (Some(gpx), Some(video), Some(timestamp)) = (params.gpx_path, params.video_path, params.sync_timestamp) {
         let result = tokio::task::spawn_blocking(move || {
             processing::run_processing(
@@ -131,6 +134,8 @@ async fn process_files(mut multipart: Multipart) -> impl IntoResponse {
                 params.speedo_position.unwrap_or_default(),
                 params.add_track_overlay,
                 params.track_position.unwrap_or_default(),
+                params.add_stats_overlay,
+                params.stats_position.unwrap_or_default(),
                 params.lang,
                 params.interpolation_level,
             )
@@ -163,7 +168,6 @@ async fn process_files(mut multipart: Multipart) -> impl IntoResponse {
         };
         (StatusCode::BAD_REQUEST, Json(response))
     }
-    // --- FIM DA CORREÇÃO ---
 }
 
 async fn suggest_sync_point(mut multipart: Multipart) -> impl IntoResponse {
@@ -174,10 +178,8 @@ async fn suggest_sync_point(mut multipart: Multipart) -> impl IntoResponse {
     let upload_dir = PathBuf::from("uploads_temp_suggest");
     tokio::fs::create_dir_all(&upload_dir).await.unwrap();
 
-    // --- INÍCIO DA CORREÇÃO: Refatoração do loop para evitar erro de empréstimo ---
     while let Some(field) = multipart.next_field().await.unwrap() {
         let name = field.name().unwrap_or("").to_string();
-        // Clona o nome do ficheiro para uma String, terminando o empréstimo de `field`
         let file_name = field.file_name().map(|s| s.to_string());
 
         if let Some(file_name_str) = file_name {
@@ -196,7 +198,6 @@ async fn suggest_sync_point(mut multipart: Multipart) -> impl IntoResponse {
             }
         }
     }
-    // --- FIM DA CORREÇÃO ---
 
     let response = if let (Some(gpx_p), Some(video_p)) = (gpx_path, video_path) {
         match utils::get_video_time_range(&video_p, "en") {

@@ -7,17 +7,17 @@ use std::error::Error;
 use chrono::{DateTime, Utc};
 use gpx::{Gpx, Waypoint, read};
 use image::Rgba;
-use crate::drawing::{generate_speedometer_image, generate_track_map_image, generate_dot_image};
-use crate::utils::{calculate_speed_kmh, get_video_time_range, calculate_g_force, calculate_bearing, interpolate_gpx_points};
+use crate::drawing::{generate_speedometer_image, generate_track_map_image, generate_dot_image, generate_stats_image};
+use crate::utils::{calculate_speed_kmh, get_video_time_range, calculate_g_force, calculate_bearing, interpolate_gpx_points, calculate_distance_to_point, calculate_elevation_gain_to_point};
 
 pub struct FrameInfo {
     path: String,
     timestamp_sec: f64,
     gpx_point: Waypoint,
+    stats_path: Option<String>,
 }
 
 fn t(key: &str, lang: &str) -> String {
-    // Função de tradução (sem alterações)
     match lang {
         "en" => match key {
             "processing_complete" => "Processing completed successfully!".to_string(),
@@ -84,12 +84,27 @@ pub fn run_processing(
     speedo_position: String,
     add_track_overlay: bool,
     track_position: String,
+    add_stats_overlay: bool,
+    stats_position: String,
     lang: String,
-    interpolation_level: i64, // Novo parâmetro
+    interpolation_level: i64,
 ) -> Result<Vec<String>, (String, Vec<String>)> {
     let mut logs = Vec::new();
     
-    match process_internal(gpx_path.clone(), video_path.clone(), &mut logs, sync_timestamp_str, add_speedo_overlay, speedo_position, add_track_overlay, track_position, &lang, interpolation_level) {
+    match process_internal(
+        gpx_path.clone(), 
+        video_path.clone(), 
+        &mut logs, 
+        sync_timestamp_str, 
+        add_speedo_overlay, 
+        speedo_position, 
+        add_track_overlay, 
+        track_position,
+        add_stats_overlay,
+        stats_position,
+        &lang, 
+        interpolation_level
+    ) {
         Ok(_) => {
             logs.push(t("processing_complete", &lang));
             cleanup_files(&gpx_path, &mut logs);
@@ -113,13 +128,17 @@ fn process_internal(
     speedo_position: String,
     add_track_overlay: bool,
     track_position: String,
+    add_stats_overlay: bool,
+    stats_position: String,
     lang: &str,
-    interpolation_level: i64, // Novo parâmetro
+    interpolation_level: i64,
 ) -> Result<(), Box<dyn Error>> {
     let output_dir = "output_frames";
+    let stats_output_dir = "output_stats_frames";
     let final_video_dir = "output";
     let map_assets_dir = "output_map_assets";
     fs::create_dir_all(output_dir)?;
+    fs::create_dir_all(stats_output_dir)?;
     fs::create_dir_all(final_video_dir)?;
     fs::create_dir_all(map_assets_dir)?;
 
@@ -137,10 +156,8 @@ fn process_internal(
     let original_gpx: Gpx = read(BufReader::new(File::open(&gpx_path)?))?;
     logs.push(t("gpx_read_success", lang));
     
-    // --- INÍCIO DA ALTERAÇÃO: Usar o nível de interpolação do modal ---
     logs.push(t("interpolating_points", lang));
     let gpx = interpolate_gpx_points(original_gpx, interpolation_level);
-    // --- FIM DA ALTERAÇÃO ---
     
     let map_image_path = format!("{}/track_base.png", map_assets_dir);
     let dot_image_path = format!("{}/marker_dot.png", map_assets_dir);
@@ -152,50 +169,68 @@ fn process_internal(
     }
     
     let mut frame_infos: Vec<FrameInfo> = Vec::new();
-    if add_speedo_overlay || add_track_overlay {
-        // ... (o resto da função permanece igual)
-    }
-
-    if !frame_infos.is_empty() {
-        // ...
-    } else if !add_speedo_overlay && !add_track_overlay {
-        // ...
-    } else {
-        // ...
-    }
-
-    // O resto da função permanece igual
-    if add_speedo_overlay || add_track_overlay {
+    if add_speedo_overlay || add_track_overlay || add_stats_overlay {
         logs.push(t("processing_gpx_points", lang));
         let mut frame_counter = 0;
+        let mut stats_frame_counter = 0;
+        
+        // Coletar todos os pontos para cálculos de estatísticas
+        let all_points: Vec<&Waypoint> = gpx.tracks.iter()
+            .flat_map(|t| t.segments.iter())
+            .flat_map(|s| s.points.iter())
+            .collect();
+        
         for track in gpx.tracks.iter() {
             for segment in track.segments.iter() {
-                let all_points = &segment.points;
-                if all_points.len() < 3 { continue; }
+                let segment_points = &segment.points;
+                if segment_points.len() < 3 { continue; }
 
-                for i in 1..all_points.len() - 1 {
-                    let p2 = &all_points[i];
+                for i in 1..segment_points.len() - 1 {
+                    let p2 = &segment_points[i];
                     if let Some(time_str) = p2.time.as_ref().and_then(|t| t.format().ok()) {
                          if let Ok(point_time) = time_str.parse::<DateTime<Utc>>() {
                             let adjusted_point_time = point_time - time_offset;
                             if adjusted_point_time >= video_start_time && adjusted_point_time <= video_end_time {
-                                let output_path = if add_speedo_overlay {
-                                    let p1 = &all_points[i - 1];
-                                    let p3 = &all_points[i + 1];
+                                let mut speedo_output_path = String::new();
+                                let mut stats_output_path = None;
+                                
+                                if add_speedo_overlay {
+                                    let p1 = &segment_points[i - 1];
+                                    let p3 = &segment_points[i + 1];
                                     let speed_kmh = calculate_speed_kmh(p1, p2).unwrap_or(0.0);
                                     let g_force = calculate_g_force(p1, p2, p3).unwrap_or(0.0);
                                     let bearing = calculate_bearing(p1, p2);
                                     let elevation = p2.elevation.unwrap_or(0.0);
-                                    let path = format!("{}/frame_{:05}.png", output_dir, frame_counter);
-                                    generate_speedometer_image(speed_kmh, bearing, g_force, elevation, &path, lang)?;
+                                    speedo_output_path = format!("{}/frame_{:05}.png", output_dir, frame_counter);
+                                    generate_speedometer_image(speed_kmh, bearing, g_force, elevation, &speedo_output_path, lang)?;
                                     frame_counter += 1;
-                                    path
-                                } else {
-                                    String::new()
-                                };
+                                }
+                                
+                                if add_stats_overlay {
+                                    // Encontrar o índice do ponto atual em todos os pontos
+                                    let current_point_index = all_points.iter().position(|&p| {
+                                        p.point().x() == p2.point().x() && 
+                                        p.point().y() == p2.point().y() &&
+                                        p.time == p2.time
+                                    }).unwrap_or(0);
+                                    
+                                    let distance_km = calculate_distance_to_point(&all_points, current_point_index);
+                                    let elevation_gain_m = calculate_elevation_gain_to_point(&all_points, current_point_index);
+                                    let altitude_m = p2.elevation.unwrap_or(0.0);
+                                    
+                                    let stats_path = format!("{}/stats_frame_{:05}.png", stats_output_dir, stats_frame_counter);
+                                    generate_stats_image(distance_km, altitude_m, elevation_gain_m, point_time, &stats_path, lang)?;
+                                    stats_output_path = Some(stats_path);
+                                    stats_frame_counter += 1;
+                                }
 
                                 let timestamp_sec = (adjusted_point_time - video_start_time).num_milliseconds() as f64 / 1000.0;
-                                frame_infos.push(FrameInfo { path: output_path, timestamp_sec, gpx_point: p2.clone() });
+                                frame_infos.push(FrameInfo { 
+                                    path: speedo_output_path, 
+                                    timestamp_sec, 
+                                    gpx_point: p2.clone(),
+                                    stats_path: stats_output_path,
+                                });
                             }
                         }
                     }
@@ -207,9 +242,22 @@ fn process_internal(
     if !frame_infos.is_empty() {
         logs.push(format!("{} {}", t("frame_generation_complete", lang), frame_infos.len()));
         logs.push(t("generating_final_video", lang));
-        generate_final_video(&video_path, &frame_infos, add_speedo_overlay, &speedo_position, add_track_overlay, &track_position, &gpx, &map_image_path, &dot_image_path, lang)?;
+        generate_final_video(
+            &video_path, 
+            &frame_infos, 
+            add_speedo_overlay, 
+            &speedo_position, 
+            add_track_overlay, 
+            &track_position,
+            add_stats_overlay,
+            &stats_position,
+            &gpx, 
+            &map_image_path, 
+            &dot_image_path, 
+            lang
+        )?;
         logs.push(t("final_video_success", lang));
-    } else if !add_speedo_overlay && !add_track_overlay {
+    } else if !add_speedo_overlay && !add_track_overlay && !add_stats_overlay {
         logs.push(t("no_overlay_selected", lang));
         fs::copy(video_path, "output/output_video.mp4")?;
     } else {
@@ -236,6 +284,8 @@ fn generate_final_video(
     speedo_position: &str,
     add_track_overlay: bool,
     track_position: &str,
+    add_stats_overlay: bool,
+    stats_position: &str,
     gpx: &Gpx,
     map_image_path: &str,
     dot_image_path: &str,
@@ -247,20 +297,24 @@ fn generate_final_video(
     let mut inputs: Vec<String> = vec!["-i".to_string(), video_path.to_str().unwrap().to_string()];
     let mut last_stream = "[0:v]".to_string();
     
+    // Overlay do velocímetro
     if add_speedo_overlay {
         let speedo_coords = get_position_coords(speedo_position);
         for (i, info) in frame_infos.iter().enumerate() {
-            inputs.push("-i".to_string());
-            inputs.push(info.path.clone());
-            let input_idx = inputs.len() / 2 - 1;
-            let output_stream = format!("[v_s_{}]", i);
-            let end_time = frame_infos.get(i + 1).map_or(info.timestamp_sec + 1.0, |ni| ni.timestamp_sec);
+            if !info.path.is_empty() {
+                inputs.push("-i".to_string());
+                inputs.push(info.path.clone());
+                let input_idx = inputs.len() / 2 - 1;
+                let output_stream = format!("[v_s_{}]", i);
+                let end_time = frame_infos.get(i + 1).map_or(info.timestamp_sec + 1.0, |ni| ni.timestamp_sec);
 
-            complex_filter.push_str(&format!(";{}[{}:v]overlay={}:enable='between(t,{},{})'{}", last_stream, input_idx, speedo_coords, info.timestamp_sec, end_time, output_stream));
-            last_stream = output_stream;
+                complex_filter.push_str(&format!(";{}[{}:v]overlay={}:enable='between(t,{},{})'{}", last_stream, input_idx, speedo_coords, info.timestamp_sec, end_time, output_stream));
+                last_stream = output_stream;
+            }
         }
     }
 
+    // Overlay do mapa de trajeto
     if add_track_overlay {
         let map_coords = get_position_coords(track_position);
         let map_input_idx = inputs.len() / 2;
@@ -309,6 +363,23 @@ fn generate_final_video(
         }
     }
     
+    // Overlay de estatísticas
+    if add_stats_overlay {
+        let stats_coords = get_position_coords(stats_position);
+        for (i, info) in frame_infos.iter().enumerate() {
+            if let Some(stats_path) = &info.stats_path {
+                inputs.push("-i".to_string());
+                inputs.push(stats_path.clone());
+                let input_idx = inputs.len() / 2 - 1;
+                let output_stream = format!("[v_st_{}]", i);
+                let end_time = frame_infos.get(i + 1).map_or(info.timestamp_sec + 1.0, |ni| ni.timestamp_sec);
+
+                complex_filter.push_str(&format!(";{}[{}:v]overlay={}:enable='between(t,{},{})'{}", last_stream, input_idx, stats_coords, info.timestamp_sec, end_time, output_stream));
+                last_stream = output_stream;
+            }
+        }
+    }
+    
     let final_filter = complex_filter.strip_prefix(';').unwrap_or(&complex_filter).to_string();
     let output_file = "output/output_video.mp4";
     if Path::new(output_file).exists() { fs::remove_file(output_file)?; }
@@ -347,6 +418,10 @@ fn cleanup_files(gpx_path: &Path, logs: &mut Vec<String>) {
 
     if let Err(e) = fs::remove_dir_all("output_frames") {
         logs.push(format!("Aviso: Não foi possível apagar a pasta de frames de telemetria: {}", e));
+    }
+    
+    if let Err(e) = fs::remove_dir_all("output_stats_frames") {
+        logs.push(format!("Aviso: Não foi possível apagar a pasta de frames de estatísticas: {}", e));
     }
     
     if let Err(e) = fs::remove_dir_all("output_map_assets") {
