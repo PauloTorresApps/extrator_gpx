@@ -90,13 +90,7 @@ L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution:
 // Event Listeners
 gpxInput.addEventListener('change', handleGpxUpload);
 videoInput.addEventListener('change', handleVideoUpload);
-generateBtn.addEventListener('click', handleGenerate);
-speedoCheckbox.addEventListener('change', () => { speedoPositionGrid.classList.toggle('hidden', !speedoCheckbox.checked); updatePositionControls(); });
-trackCheckbox.addEventListener('change', () => { trackPositionGrid.classList.toggle('hidden', !trackCheckbox.checked); updatePositionControls(); });
-statsCheckbox.addEventListener('change', () => { statsPositionGrid.classList.toggle('hidden', !statsCheckbox.checked); updatePositionControls(); });
-speedoPositionRadios.forEach(radio => radio.addEventListener('change', updatePositionControls));
-trackPositionRadios.forEach(radio => radio.addEventListener('change', updatePositionControls));
-statsPositionRadios.forEach(radio => radio.addEventListener('change', updatePositionControls));
+
 document.getElementById('lang-pt').addEventListener('click', () => setLanguage('pt-BR'));
 document.getElementById('lang-en').addEventListener('click', () => setLanguage('en'));
 
@@ -105,24 +99,6 @@ settingsBtn.addEventListener('click', () => settingsModal.classList.remove('hidd
 closeModalBtn.addEventListener('click', () => settingsModal.classList.add('hidden'));
 settingsModal.addEventListener('click', (e) => { if (e.target === settingsModal) { settingsModal.classList.add('hidden'); } });
 interpolationSlider.addEventListener('input', () => { interpolationValue.textContent = `${interpolationSlider.value}s`; });
-
-function updatePositionControls() {
-    const speedoPos = speedoCheckbox.checked ? document.querySelector('input[name="speedoPosition"]:checked').value : null;
-    const trackPos = trackCheckbox.checked ? document.querySelector('input[name="trackPosition"]:checked').value : null;
-    const statsPos = statsCheckbox.checked ? document.querySelector('input[name="statsPosition"]:checked').value : null;
-    
-    const usedPositions = [speedoPos, trackPos, statsPos].filter(pos => pos !== null);
-    
-    trackPositionRadios.forEach(radio => { 
-        radio.disabled = usedPositions.includes(radio.value) && radio.value !== trackPos; 
-    });
-    speedoPositionRadios.forEach(radio => { 
-        radio.disabled = usedPositions.includes(radio.value) && radio.value !== speedoPos; 
-    });
-    statsPositionRadios.forEach(radio => { 
-        radio.disabled = usedPositions.includes(radio.value) && radio.value !== statsPos; 
-    });
-}
 
 async function fetchAndApplySuggestion() {
     if (!gpxFile || !videoFile) return;
@@ -159,10 +135,262 @@ function handleGpxUpload(event) { gpxFile = event.target.files[0]; if (!gpxFile)
 function handleVideoUpload(event) { videoFile = event.target.files[0]; if (!videoFile) return; videoInfo.textContent = videoFile.name; checkAndShowMapSection(); fetchAndApplySuggestion(); }
 function checkAndShowMapSection() { if (gpxFile && videoFile) { mapSection.style.display = 'block'; syncPointInfo.style.display = 'block'; setTimeout(() => map.invalidateSize(), 100); } }
 function displayTrack(points) { if (trackLayer) map.removeLayer(trackLayer); const latLngs = points.map(p => [p.lat, p.lon]); trackLayer = L.polyline(latLngs, { color: '#bb86fc', weight: 3, opacity: 0.8 }).addTo(map); const bounds = trackLayer.getBounds(); if (bounds.isValid()) { map.fitBounds(bounds.pad(0.1)); } trackLayer.on('click', (e) => { let closestPoint = null, minDistance = Infinity; gpxDataPoints.forEach(p => { const distance = map.distance([p.lat, p.lon], e.latlng); if (distance < minDistance) { minDistance = distance; closestPoint = p; } }); if (closestPoint) { selectSyncPoint(closestPoint, false); } }); }
-function selectSyncPoint(point, isSuggestion) { selectedSyncPoint = point; if (userMarker) map.removeLayer(userMarker); if (suggestionMarker) map.removeLayer(suggestionMarker); const iconToUse = isSuggestion ? suggestionIcon : userIcon; const newMarker = L.marker([point.lat, point.lon], { icon: iconToUse }).addTo(map); if(isSuggestion) { suggestionMarker = newMarker; } else { userMarker = newMarker; } const pointTime = new Date(point.time).toLocaleString(currentLang.startsWith('en') ? 'en-US' : 'pt-BR', { timeZone: 'UTC' }); syncPointInfo.textContent = t('sync_point_selected', { type: isSuggestion ? t('suggestion_type') : t('manual_type'), time: pointTime }); if (videoFile) { positionSection.style.display = 'block'; generateBtn.style.display = 'flex'; updatePositionControls(); } }
+function selectSyncPoint(point, isSuggestion) { selectedSyncPoint = point; if (userMarker) map.removeLayer(userMarker); if (suggestionMarker) map.removeLayer(suggestionMarker); const iconToUse = isSuggestion ? suggestionIcon : userIcon; const newMarker = L.marker([point.lat, point.lon], { icon: iconToUse }).addTo(map); if(isSuggestion) { suggestionMarker = newMarker; } else { userMarker = newMarker; } const pointTime = new Date(point.time).toLocaleString(currentLang.startsWith('en') ? 'en-US' : 'pt-BR', { timeZone: 'UTC' }); syncPointInfo.textContent = t('sync_point_selected', { type: isSuggestion ? t('suggestion_type') : t('manual_type'), time: pointTime }); if (videoFile) { positionSection.style.display = 'block'; generateBtn.style.display = 'flex'; } }
 
-function handleGenerate() {
-    if (!gpxFile || !videoFile || !selectedSyncPoint) { statusDiv.textContent = t('error_missing_files'); return; }
+// ==============================================
+// SISTEMA INLINE DE OVERLAYS - VERSÃO FINAL CORRIGIDA
+// ==============================================
+class InlineOverlayManager {
+    constructor() {
+        this.overlayPositions = new Map(); // overlay -> corner
+        this.overlayStates = new Map(); // overlay -> true/false (ativo/inativo)
+        
+        this.cornerSequence = ['bottom-left', 'top-left', 'top-right', 'bottom-right'];
+        
+        this.cornerLabels = {
+            'bottom-left': 'IE', 'top-left': 'SE', 
+            'top-right': 'SD', 'bottom-right': 'ID'
+        };
+        
+        this.overlayConfig = {
+            speedometer: { icon: '⚙️', name: 'Velocímetro' },
+            map: { icon: '🗺️', name: 'Mapa' },
+            stats: { icon: '📊', name: 'Estatísticas' }
+        };
+        
+        this.init();
+    }
+    
+    init() {
+        this.replaceOldSystem();
+        this.addEventListeners();
+        
+        this.overlayStates.set('speedometer', false);
+        this.overlayStates.set('map', false);
+        this.overlayStates.set('stats', false);
+        
+        this.updateInterface();
+        this.updateLegacyControls();
+    }
+    
+    replaceOldSystem() {
+        const container = document.querySelector('.overlays-config-container');
+        if (!container) return;
+        
+        container.innerHTML = `
+            <div class="overlay-images-group">
+                <div class="overlay-image speedometer-img" data-overlay="speedometer">
+                    <div class="active-indicator"></div><div class="position-indicator"></div>⚙️
+                </div>
+                <div class="overlay-image map-img" data-overlay="map">
+                    <div class="active-indicator"></div><div class="position-indicator"></div>🗺️
+                </div>
+                <div class="overlay-image stats-img" data-overlay="stats">
+                    <div class="active-indicator"></div><div class="position-indicator"></div>📊
+                </div>
+            </div>
+            <div class="overlay-separator"></div>
+            <div class="corner-controls-container">
+                <div class="corner-controls">
+                    <div class="corner-btn corner-top-left" data-corner="top-left">↖</div>
+                    <div class="corner-btn corner-top-right" data-corner="top-right">↗</div>
+                    <div class="corner-btn corner-bottom-left" data-corner="bottom-left">↙</div>
+                    <div class="corner-btn corner-bottom-right" data-corner="bottom-right">↘</div>
+                </div>
+                <div class="control-label">Clique nas imagens para ativar</div>
+            </div>
+        `;
+    }
+    
+    addEventListeners() {
+        document.querySelectorAll('.overlay-image').forEach(image => {
+            image.addEventListener('click', (e) => {
+                const overlay = e.currentTarget.dataset.overlay;
+                this.handleOverlayClick(overlay);
+            });
+        });
+    }
+
+    /**
+     * LÓGICA DE CLIQUE FINAL E CORRETA
+     * Esta nova abordagem elimina completamente o ciclo infinito.
+     */
+    handleOverlayClick(overlayType) {
+        const isActive = this.overlayStates.get(overlayType);
+
+        if (!isActive) {
+            // Lógica de Ativação: Encontra o primeiro canto totalmente livre.
+            const firstAvailableCorner = this.findFirstAvailableCorner();
+            if (firstAvailableCorner) {
+                this.overlayStates.set(overlayType, true);
+                this.overlayPositions.set(overlayType, firstAvailableCorner);
+            }
+        } else {
+            // Lógica de Mover/Desativar
+            // 1. Cria uma lista de cantos disponíveis para ESTE overlay
+            //    (ou seja, todos os cantos exceto os ocupados por OUTROS overlays).
+            const availableCornersForThisOverlay = this.cornerSequence.filter(corner => {
+                for (const [otherOverlay, otherPosition] of this.overlayPositions.entries()) {
+                    if (otherOverlay !== overlayType && otherPosition === corner) {
+                        return false; // Canto ocupado por outro overlay.
+                    }
+                }
+                return true; // Canto está livre ou ocupado por mim mesmo.
+            });
+
+            const currentPosition = this.overlayPositions.get(overlayType);
+            const currentIndex = availableCornersForThisOverlay.indexOf(currentPosition);
+
+            // 2. Verifica se o overlay está no FIM do seu ciclo pessoal.
+            if (currentIndex === availableCornersForThisOverlay.length - 1) {
+                // Se sim, desativa.
+                this.overlayStates.set(overlayType, false);
+                this.overlayPositions.delete(overlayType);
+            } else {
+                // Se não, move para a próxima posição na sua lista de cantos disponíveis.
+                const nextPosition = availableCornersForThisOverlay[currentIndex + 1];
+                this.overlayPositions.set(overlayType, nextPosition);
+            }
+        }
+
+        this.updateInterface();
+        this.updateLegacyControls();
+    }
+
+    findFirstAvailableCorner() {
+        const occupiedCorners = Array.from(this.overlayPositions.values());
+        for (const corner of this.cornerSequence) {
+            if (!occupiedCorners.includes(corner)) {
+                return corner;
+            }
+        }
+        return null;
+    }
+    
+    updateInterface() {
+        const allOverlays = Object.keys(this.overlayConfig);
+        
+        allOverlays.forEach(overlay => {
+            const imageElement = document.querySelector(`[data-overlay="${overlay}"]`);
+            const positionIndicator = imageElement.querySelector('.position-indicator');
+            const isActive = this.overlayStates.get(overlay);
+            
+            imageElement.classList.toggle('active', isActive);
+            
+            if (isActive) {
+                const corner = this.overlayPositions.get(overlay);
+                positionIndicator.textContent = this.cornerLabels[corner] || '';
+            } else {
+                positionIndicator.textContent = '';
+            }
+        });
+        
+        const occupiedCorners = Array.from(this.overlayPositions.values());
+        document.querySelectorAll('.corner-btn').forEach(btn => {
+            const corner = btn.dataset.corner;
+            btn.classList.toggle('occupied', occupiedCorners.includes(corner));
+        });
+
+        const labelElement = document.querySelector('.control-label');
+        const activeOverlays = [];
+        
+        this.cornerSequence.forEach(corner => {
+            for (const [overlay, position] of this.overlayPositions.entries()) {
+                if (position === corner) {
+                    activeOverlays.push(`${this.overlayConfig[overlay].icon}:${this.cornerLabels[corner]}`);
+                }
+            }
+        });
+        
+        if (activeOverlays.length > 0) {
+            labelElement.textContent = `Ativos: ${activeOverlays.join(' | ')}`;
+            labelElement.classList.add('active');
+        } else {
+            labelElement.textContent = 'Clique nas imagens para ativar';
+            labelElement.classList.remove('active');
+        }
+    }
+    
+    updateLegacyControls() {
+        if (speedoCheckbox) speedoCheckbox.checked = this.overlayStates.get('speedometer');
+        if (trackCheckbox) trackCheckbox.checked = this.overlayStates.get('map');
+        if (statsCheckbox) statsCheckbox.checked = this.overlayStates.get('stats');
+        
+        this.updateRadioButtons('speedometer', 'speedoPosition');
+        this.updateRadioButtons('map', 'trackPosition');
+        this.updateRadioButtons('stats', 'statsPosition');
+    }
+    
+    updateRadioButtons(overlayType, radioName) {
+        const radios = document.querySelectorAll(`input[name="${radioName}"]`);
+        if (!radios.length) return;
+        
+        radios.forEach(radio => radio.checked = false);
+        
+        if (this.overlayStates.get(overlayType)) {
+            const position = this.overlayPositions.get(overlayType);
+            if (position) {
+                const targetRadio = document.querySelector(`input[name="${radioName}"][value="${position}"]`);
+                if (targetRadio) targetRadio.checked = true;
+            }
+        }
+    }
+    
+    getConfiguration() {
+        return {
+            addSpeedoOverlay: this.overlayStates.get('speedometer'),
+            addTrackOverlay: this.overlayStates.get('map'),
+            addStatsOverlay: this.overlayStates.get('stats'),
+            speedoPosition: this.overlayPositions.get('speedometer') || null,
+            trackPosition: this.overlayPositions.get('map') || null,
+            statsPosition: this.overlayPositions.get('stats') || null
+        };
+    }
+
+    applyConfiguration(config) {
+        this.overlayStates.clear();
+        this.overlayPositions.clear();
+        
+        document.querySelectorAll('.overlay-image').forEach(img => {
+            img.classList.remove('active', 'selected');
+        });
+        
+        if (config.addSpeedoOverlay === true && config.speedoPosition) {
+            this.overlayStates.set('speedometer', true);
+            this.overlayPositions.set('speedometer', config.speedoPosition);
+        } else {
+            this.overlayStates.set('speedometer', false);
+        }
+        
+        if (config.addTrackOverlay === true && config.trackPosition) {
+            this.overlayStates.set('map', true);
+            this.overlayPositions.set('map', config.trackPosition);
+        } else {
+            this.overlayStates.set('map', false);
+        }
+        
+        if (config.addStatsOverlay === true && config.statsPosition) {
+            this.overlayStates.set('stats', true);
+            this.overlayPositions.set('stats', config.statsPosition);
+        } else {
+            this.overlayStates.set('stats', false);
+        }
+        
+        this.updateInterface();
+        this.updateLegacyControls();
+    }
+}
+
+// Instanciar o gerenciador inline
+let inlineOverlayManager;
+
+// Nova função handleGenerate para usar sistema inline
+function handleGenerateWithInlineOverlays() {
+    if (!gpxFile || !videoFile || !selectedSyncPoint) { 
+        statusDiv.textContent = t('error_missing_files'); 
+        return; 
+    }
+    
     generateBtn.disabled = true;
     statusDiv.textContent = t('uploading_files');
     progressContainer.style.display = 'block';
@@ -178,16 +406,33 @@ function handleGenerate() {
     formData.append('lang', currentLang);
     formData.append('interpolationLevel', interpolationSlider.value);
 
-    formData.append('addSpeedoOverlay', speedoCheckbox.checked);
-    if (speedoCheckbox.checked) { formData.append('speedoPosition', document.querySelector('input[name="speedoPosition"]:checked').value); }
-    formData.append('addTrackOverlay', trackCheckbox.checked);
-    if (trackCheckbox.checked) { formData.append('trackPosition', document.querySelector('input[name="trackPosition"]:checked').value); }
-    formData.append('addStatsOverlay', statsCheckbox.checked);
-    if (statsCheckbox.checked) { formData.append('statsPosition', document.querySelector('input[name="statsPosition"]:checked').value); }
+    // Usar configuração do sistema inline
+    const overlayConfig = inlineOverlayManager.getConfiguration();
+    
+    formData.append('addSpeedoOverlay', overlayConfig.addSpeedoOverlay);
+    if (overlayConfig.addSpeedoOverlay) { 
+        formData.append('speedoPosition', overlayConfig.speedoPosition); 
+    }
+    
+    formData.append('addTrackOverlay', overlayConfig.addTrackOverlay);
+    if (overlayConfig.addTrackOverlay) { 
+        formData.append('trackPosition', overlayConfig.trackPosition); 
+    }
+    
+    formData.append('addStatsOverlay', overlayConfig.addStatsOverlay);
+    if (overlayConfig.addStatsOverlay) { 
+        formData.append('statsPosition', overlayConfig.statsPosition); 
+    }
 
     const xhr = new XMLHttpRequest();
     xhr.open('POST', '/process', true);
-    xhr.upload.onprogress = (event) => { if (event.lengthComputable) { const percentComplete = Math.round((event.loaded / event.total) * 100); progressBar.style.width = percentComplete + '%'; progressBar.textContent = percentComplete + '%'; } };
+    xhr.upload.onprogress = (event) => { 
+        if (event.lengthComputable) { 
+            const percentComplete = Math.round((event.loaded / event.total) * 100); 
+            progressBar.style.width = percentComplete + '%'; 
+            progressBar.textContent = percentComplete + '%'; 
+        } 
+    };
     xhr.onload = () => {
         progressContainer.style.display = 'none';
         const result = JSON.parse(xhr.responseText);
@@ -195,14 +440,39 @@ function handleGenerate() {
         logsContainer.style.display = 'block';
         if (xhr.status >= 200 && xhr.status < 300) {
             statusDiv.textContent = t('success_message');
-            if (result.download_url) { downloadLink.href = result.download_url; downloadDiv.style.display = 'block'; }
+            if (result.download_url) { 
+                downloadLink.href = result.download_url; 
+                downloadDiv.style.display = 'block'; 
+            }
         } else {
             statusDiv.textContent = t('server_error', { message: result.message || 'Unknown error' });
         }
         generateBtn.disabled = false;
     };
-    xhr.onerror = () => { statusDiv.textContent = t('network_error'); generateBtn.disabled = false; progressContainer.style.display = 'none'; };
+    xhr.onerror = () => { 
+        statusDiv.textContent = t('network_error'); 
+        generateBtn.disabled = false; 
+        progressContainer.style.display = 'none'; 
+    };
     xhr.send(formData);
 }
 
-document.addEventListener('DOMContentLoaded', () => { setLanguage(currentLang); });
+// Função de inicialização
+function initializeInlineOverlaySystem() {
+    inlineOverlayManager = new InlineOverlayManager();
+}
+
+// Inicialização quando DOM carregado
+document.addEventListener('DOMContentLoaded', () => {
+    setLanguage(currentLang);
+    
+    // Aguardar um pouco para garantir que outros elementos carregaram
+    setTimeout(() => {
+        initializeInlineOverlaySystem();
+        
+        // Substituir event listener do botão generate
+        if (generateBtn) {
+            generateBtn.addEventListener('click', handleGenerateWithInlineOverlays);
+        }
+    }, 500);
+});

@@ -84,133 +84,209 @@ input[type="file"]:disabled + .file-upload-label { background: linear-gradient(1
 .file-group-label { font-weight: 600; color: var(--primary-color); font-size: 1rem; }
 #status { text-align: center; padding: 1rem; background: rgba(42, 42, 42, 0.6); border-radius: 12px; border: 1px solid var(--border-color); font-weight: 500; }
 
-.overlays-config-container { 
-    display: flex; 
-    justify-content: center; 
-    align-items: center; 
-    gap: 0.5rem; /* Reduzido de 2rem */
-    flex-wrap: nowrap; /* Força linha única */
-    padding: 0.25rem 0; /* Padding mínimo */
-    height: 60px; /* Altura fixa baixa */
+/* SISTEMA INLINE DE OVERLAYS - CORRIGIDO */
+.overlays-config-container {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 1.5rem;
+    padding: 1rem;
+    background: rgba(0, 0, 0, 0.2);
+    border-radius: 12px;
+    flex-wrap: nowrap;
+    min-height: 80px;
 }
 
-.position-container { 
-    padding: 0.25rem; /* Reduzido drasticamente de 1rem */
-    border: 1px solid var(--border-color); 
-    border-radius: 8px; /* Menor que 12px */
-    background: rgba(0,0,0,0.2); 
-    display: flex; 
-    flex-direction: row; /* MUDANÇA: Horizontal em vez de vertical */
-    align-items: center; 
-    gap: 0.5rem; /* Reduzido de 1rem */
-    flex-basis: auto; /* Tamanho automático */
-    flex-grow: 0; /* Não cresce */
-    flex-shrink: 1; /* Pode encolher se necessário */
-    transition: all 0.3s ease;
-    height: 50px; /* Altura fixa baixa */
-    min-width: 120px; /* Largura mínima para caber conteúdo */
+/* Container específico para as imagens inline */
+.overlay-images-group {
+    display: flex;
+    gap: 1rem;
+    align-items: center;
+    flex-shrink: 0;
 }
 
-/* Melhorias visuais mantidas */
-.position-container:hover {
-    border-color: rgba(187, 134, 252, 0.5);
-    background: rgba(0,0,0,0.3);
-}
-
-.position-container:has(input[type="checkbox"]:checked) {
-    border-color: var(--primary-color);
-    background: rgba(187, 134, 252, 0.1);
-}
-
-.position-container legend { 
-    display: none; 
-}
-
-.overlay-toggle { 
-    display: flex; 
-    align-items: center; 
-    gap: 0.25rem; /* Reduzido de 0.5rem */
-    padding: 0; /* Remove padding */
-    border-radius: 0; 
-    width: auto; /* Largura automática */
-    justify-content: flex-start; /* Alinha à esquerda */
-    height: auto;
-    flex-shrink: 0; /* Não encolhe o texto */
-}
-
-.overlay-toggle label { 
-    font-weight: 500; /* Reduzido de 600 */
-    font-size: 0.75rem; /* Reduzido drasticamente de 1rem */
-    cursor: pointer; 
-    color: var(--text-color); 
-    white-space: nowrap; /* Evita quebra de linha */
-    margin: 0; /* Remove margens padrão */
-}
-
-.overlay-toggle input[type="checkbox"] { 
-    cursor: pointer; 
-    transform: scale(1); /* Tamanho normal em vez de 1.3 */
-    accent-color: var(--primary-color);
-    margin: 0; /* Remove margens padrão */
-}
-
-.position-grid { 
-    display: grid; 
-    grid-template-columns: 20px 20px; /* Reduzido drasticamente de 40px */
-    grid-template-rows: 20px 20px; /* Reduzido drasticamente de 40px */
-    gap: 1px; /* Gap mínimo */
-    background: rgba(0,0,0,0.2); 
-    padding: 0.15rem; /* Reduzido de 0.5rem */
-    border-radius: 4px; /* Reduzido de 8px */
-    transition: all 0.3s ease;
-    flex-shrink: 0; /* Mantém tamanho do grid */
-}
-
-.position-grid.hidden { 
-    display: none; 
-}
-
-.position-grid-cell input[type="radio"] { 
-    appearance: none; 
-    -webkit-appearance: none; 
-    -moz-appearance: none; 
-    position: absolute; 
-    opacity: 0; 
-    width: 0; 
-    height: 0; 
-}
-
-.position-grid-cell { 
-    border-radius: 3px; /* Reduzido de 8px */
-    cursor: pointer; 
-    display: flex; 
-    align-items: center; 
-    justify-content: center; 
-    color: var(--text-color); 
-    transition: all 0.2s ease; 
-    border: 1px solid transparent; /* Borda mais fina */
+/* Imagens dos overlays */
+.overlay-image {
+    width: 60px;
+    height: 45px;
     background: rgba(68, 68, 68, 0.5);
-    width: 20px; /* Reduzido drasticamente de tamanho implícito */
-    height: 20px; /* Reduzido drasticamente de tamanho implícito */
+    border: 2px solid var(--border-color);
+    border-radius: 6px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.5rem;
+    transition: all 0.3s ease;
+    position: relative;
+    user-select: none;
 }
 
-.position-grid-cell:has(input:checked) { 
-    background: linear-gradient(135deg, var(--primary-color), #a374e8); 
-    color: var(--bg-color); 
-    border-color: var(--primary-color); 
+.overlay-image:hover {
+    border-color: var(--primary-color);
+    background: rgba(68, 68, 68, 0.7);
+    transform: translateY(-2px);
 }
 
-.position-grid-cell:has(input:disabled) { 
-    background: var(--bg-color); 
-    opacity: 0.5; 
-    cursor: not-allowed; 
+.overlay-image.active {
+    border-color: var(--success-color);
+    background: rgba(76, 175, 80, 0.2);
 }
 
-.position-grid-cell svg { 
-    width: 12px; /* Reduzido drasticamente de 20px */
-    height: 12px; /* Reduzido drasticamente de 20px */
-    stroke: currentColor; 
-    stroke-width: 2.5; /* Mais grosso para compensar tamanho menor */
+.overlay-image.selected {
+    border-color: var(--primary-color);
+    background: rgba(187, 134, 252, 0.3);
+    box-shadow: 0 0 0 2px rgba(187, 134, 252, 0.5);
+}
+
+/* Indicador de ativo (bolinha verde) */
+.active-indicator {
+    position: absolute;
+    top: -3px;
+    right: -3px;
+    width: 12px;
+    height: 12px;
+    background: var(--success-color);
+    border: 2px solid white;
+    border-radius: 50%;
+    display: none;
+    z-index: 10;
+}
+
+.overlay-image.active .active-indicator {
+    display: block;
+}
+
+/* Indicador de posição atual */
+.position-indicator {
+    position: absolute;
+    bottom: 2px;
+    right: 2px;
+    width: 16px;
+    height: 12px;
+    background: var(--primary-color);
+    color: white;
+    font-size: 0.6rem;
+    font-weight: bold;
+    border-radius: 3px;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    z-index: 10;
+}
+
+.overlay-image.active .position-indicator {
+    display: flex;
+}
+
+/* Previews temáticos para cada overlay */
+.speedometer-img { 
+    background: radial-gradient(circle, rgba(187, 134, 252, 0.4) 0%, rgba(187, 134, 252, 0.2) 70%); 
+}
+
+.map-img { 
+    background: linear-gradient(45deg, rgba(3, 218, 198, 0.4) 0%, rgba(3, 218, 198, 0.2) 100%); 
+}
+
+.stats-img { 
+    background: linear-gradient(135deg, rgba(255, 193, 7, 0.4) 0%, rgba(255, 193, 7, 0.2) 100%); 
+}
+
+/* Separador visual */
+.overlay-separator {
+    width: 2px;
+    height: 50px;
+    background: linear-gradient(to bottom, transparent, var(--border-color), transparent);
+    margin: 0 0.5rem;
+    flex-shrink: 0;
+}
+
+/* Controles de cantos */
+.corner-controls {
+    display: grid;
+    grid-template-columns: 30px 30px;
+    grid-template-rows: 30px 30px;
+    gap: 4px;
+    background: rgba(0, 0, 0, 0.3);
+    padding: 0.5rem;
+    border-radius: 6px;
+    border: 1px solid var(--border-color);
+    flex-shrink: 0;
+}
+
+.corner-btn {
+    width: 30px;
+    height: 30px;
+    background: rgba(68, 68, 68, 0.5);
+    border: 1px solid var(--border-color);
+    border-radius: 4px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.3s ease;
+    color: var(--text-color);
+    font-size: 0.9rem;
+    position: relative;
+    user-select: none;
+}
+
+.corner-btn:hover:not(.disabled) {
+    border-color: var(--primary-color);
+    background: rgba(68, 68, 68, 0.7);
+}
+
+.corner-btn.active {
+    border-color: var(--success-color);
+    background: var(--success-color);
+    color: white;
+}
+
+.corner-btn.disabled {
+    opacity: 0.3;
+    cursor: not-allowed;
+    background: rgba(68, 68, 68, 0.2);
+}
+
+.corner-btn.occupied {
+    background: rgba(255, 193, 7, 0.3);
+    border-color: rgba(255, 193, 7, 0.7);
+}
+
+/* Posicionamento dos botões de canto */
+.corner-top-left { grid-column: 1; grid-row: 1; }
+.corner-top-right { grid-column: 2; grid-row: 1; }
+.corner-bottom-left { grid-column: 1; grid-row: 2; }
+.corner-bottom-right { grid-column: 2; grid-row: 2; }
+
+/* Container dos controles com label */
+.corner-controls-container {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.25rem;
+    flex-shrink: 0;
+}
+
+/* Label do controle */
+.control-label {
+    font-size: 0.75rem;
+    color: #aaa;
+    text-align: center;
+    font-weight: 500;
+}
+
+.control-label.active {
+    color: var(--primary-color);
+    font-weight: 600;
+}
+
+/* Remove estilos antigos que não são mais necessários */
+.position-container,
+.overlay-toggle,
+.position-grid,
+.position-grid-cell {
+    display: none !important;
 }
 
 /* --- INÍCIO DA ALTERAÇÃO: Estilos do Modal de Configurações --- */
@@ -316,42 +392,63 @@ input[type="file"]:disabled + .file-upload-label { background: linear-gradient(1
 }
 /* --- FIM DA ALTERAÇÃO --- */
 
-/* Responsividade aprimorada para mobile */
+/* Responsividade */
 @media (max-width: 768px) {
-    .overlays-config-container { 
-        flex-direction: column; 
-        align-items: stretch;
-        gap: 0.25rem; /* Gap ainda menor no mobile */
-        height: auto; /* Remove altura fixa no mobile */
-        padding: 0.5rem 0; /* Padding ligeiramente maior no mobile */
+    #app { padding: 1rem; margin: 0.5rem; }
+    h1 { font-size: 2rem; }
+    .files-container { grid-template-columns: 1fr; gap: 1.5rem; }
+    
+    .overlays-config-container {
+        flex-direction: column;
+        gap: 1rem;
+        padding: 0.75rem;
+        flex-wrap: wrap;
     }
     
-    .position-container {
-        flex-direction: row; /* Mantém horizontal mesmo no mobile */
-        height: 40px; /* Ainda menor no mobile */
-        min-width: auto;
-        justify-content: space-between; /* Distribui espaço */
-        padding: 0.2rem 0.5rem; /* Padding ajustado para mobile */
+    .overlay-images-group {
+        order: 1;
+        gap: 0.75rem;
     }
     
-    .overlay-toggle label {
-        font-size: 0.7rem; /* Ainda menor no mobile */
+    .overlay-separator {
+        order: 2;
+        width: 50px;
+        height: 2px;
+        margin: 0.25rem 0;
     }
     
-    .position-grid {
-        grid-template-columns: 18px 18px; /* Menor no mobile */
-        grid-template-rows: 18px 18px; /* Menor no mobile */
-        padding: 0.1rem; /* Padding mínimo no mobile */
+    .corner-controls-container {
+        order: 3;
     }
     
-    .position-grid-cell {
-        width: 18px;
-        height: 18px;
+    .corner-controls {
+        grid-template-columns: 28px 28px;
+        grid-template-rows: 28px 28px;
+        gap: 3px;
+        padding: 0.4rem;
     }
     
-    .position-grid-cell svg {
+    .corner-btn {
+        width: 28px;
+        height: 28px;
+        font-size: 0.8rem;
+    }
+    
+    .overlay-image {
+        width: 55px;
+        height: 40px;
+        font-size: 1.3rem;
+    }
+    
+    .active-indicator {
         width: 10px;
         height: 10px;
-        stroke-width: 3; /* Mais grosso para manter visibilidade */
+        border-width: 1px;
+    }
+    
+    .position-indicator {
+        width: 14px;
+        height: 10px;
+        font-size: 0.5rem;
     }
 }
