@@ -62,6 +62,7 @@ struct SuggestionResponse {
     latitude: Option<f64>,
     longitude: Option<f64>,
     timestamp: Option<String>,
+    display_timestamp: Option<String>,
     interpolated_points: Option<Vec<PointJson>>,
 }
 
@@ -214,19 +215,63 @@ async fn suggest_sync_point(mut multipart: Multipart) -> impl IntoResponse {
 
                         if let Some(point) = first_point_after {
                             let point_coords = point.point();
-                            let timestamp_str = point.time.and_then(|t| t.format().ok()).unwrap();
-                            Json(SuggestionResponse { message: "Sync point suggested.".to_string(), latitude: Some(point_coords.y()), longitude: Some(point_coords.x()), timestamp: Some(timestamp_str), interpolated_points: Some(points_for_json) })
+                            let timestamp_iso_str = point.time.and_then(|t| t.format().ok()).unwrap();
+
+                            let display_timestamp_str = if let Ok(utc_time) = timestamp_iso_str.parse::<DateTime<chrono::Utc>>() {
+                                let brt_offset = chrono::FixedOffset::west_opt(3 * 3600).unwrap();
+                                let local_time = utc_time.with_timezone(&brt_offset);
+                                format!("{} (-03:00)", local_time.format("%d/%m/%Y, %H:%M:%S"))
+                            } else {
+                                timestamp_iso_str.clone()
+                            };
+
+                            Json(SuggestionResponse {
+                                message: "Sync point suggested.".to_string(),
+                                latitude: Some(point_coords.y()),
+                                longitude: Some(point_coords.x()),
+                                timestamp: Some(timestamp_iso_str),
+                                display_timestamp: Some(display_timestamp_str),
+                                interpolated_points: Some(points_for_json),
+                            })
                         } else {
-                            Json(SuggestionResponse { message: "No GPX point found after video start.".to_string(), latitude: None, longitude: None, timestamp: None, interpolated_points: Some(points_for_json) })
+                            Json(SuggestionResponse { 
+                                message: "No GPX point found after video start.".to_string(), 
+                                latitude: None, 
+                                longitude: None, 
+                                timestamp: None, 
+                                display_timestamp: None, // CORRIGIDO
+                                interpolated_points: Some(points_for_json) 
+                            })
                         }
                     },
-                    Err(_) => Json(SuggestionResponse { message: "Error reading GPX file.".to_string(), latitude: None, longitude: None, timestamp: None, interpolated_points: None }),
+                    Err(_) => Json(SuggestionResponse { 
+                        message: "Error reading GPX file.".to_string(), 
+                        latitude: None, 
+                        longitude: None, 
+                        timestamp: None, 
+                        display_timestamp: None, // CORRIGIDO
+                        interpolated_points: None 
+                    }),
                 }
             },
-            Err(e) => Json(SuggestionResponse { message: format!("Error reading video metadata: {}", e), latitude: None, longitude: None, timestamp: None, interpolated_points: None }),
+            Err(e) => Json(SuggestionResponse { 
+                message: format!("Error reading video metadata: {}", e), 
+                latitude: None, 
+                longitude: None, 
+                timestamp: None, 
+                display_timestamp: None, // CORRIGIDO
+                interpolated_points: None 
+            }),
         }
     } else {
-        Json(SuggestionResponse { message: "Missing video or GPX file.".to_string(), latitude: None, longitude: None, timestamp: None, interpolated_points: None })
+        Json(SuggestionResponse { 
+            message: "Missing video or GPX file.".to_string(), 
+            latitude: None, 
+            longitude: None, 
+            timestamp: None, 
+            display_timestamp: None, // CORRIGIDO
+            interpolated_points: None 
+        })
     };
     
     let _ = tokio::fs::remove_dir_all(&upload_dir).await;

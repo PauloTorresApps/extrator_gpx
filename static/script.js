@@ -116,7 +116,7 @@ async function fetchAndApplySuggestion() {
             displayTrack(gpxDataPoints);
         }
         if (response.ok && data.timestamp) {
-            const suggestedPoint = { lat: data.latitude, lon: data.longitude, time: new Date(data.timestamp) };
+            const suggestedPoint = { lat: data.latitude, lon: data.longitude, time: new Date(data.timestamp), displayTime: data.display_timestamp };
             selectSyncPoint(suggestedPoint, true);
             statusDiv.textContent = t('suggestion_applied');
         } else {
@@ -135,7 +135,19 @@ function handleGpxUpload(event) { gpxFile = event.target.files[0]; if (!gpxFile)
 function handleVideoUpload(event) { videoFile = event.target.files[0]; if (!videoFile) return; videoInfo.textContent = videoFile.name; checkAndShowMapSection(); fetchAndApplySuggestion(); }
 function checkAndShowMapSection() { if (gpxFile && videoFile) { mapSection.style.display = 'block'; syncPointInfo.style.display = 'block'; setTimeout(() => map.invalidateSize(), 100); } }
 function displayTrack(points) { if (trackLayer) map.removeLayer(trackLayer); const latLngs = points.map(p => [p.lat, p.lon]); trackLayer = L.polyline(latLngs, { color: '#bb86fc', weight: 3, opacity: 0.8 }).addTo(map); const bounds = trackLayer.getBounds(); if (bounds.isValid()) { map.fitBounds(bounds.pad(0.1)); } trackLayer.on('click', (e) => { let closestPoint = null, minDistance = Infinity; gpxDataPoints.forEach(p => { const distance = map.distance([p.lat, p.lon], e.latlng); if (distance < minDistance) { minDistance = distance; closestPoint = p; } }); if (closestPoint) { selectSyncPoint(closestPoint, false); } }); }
-function selectSyncPoint(point, isSuggestion) { selectedSyncPoint = point; if (userMarker) map.removeLayer(userMarker); if (suggestionMarker) map.removeLayer(suggestionMarker); const iconToUse = isSuggestion ? suggestionIcon : userIcon; const newMarker = L.marker([point.lat, point.lon], { icon: iconToUse }).addTo(map); if(isSuggestion) { suggestionMarker = newMarker; } else { userMarker = newMarker; } const pointTime = new Date(point.time).toLocaleString(currentLang.startsWith('en') ? 'en-US' : 'pt-BR', { timeZone: 'UTC' }); syncPointInfo.textContent = t('sync_point_selected', { type: isSuggestion ? t('suggestion_type') : t('manual_type'), time: pointTime }); if (videoFile) { positionSection.style.display = 'block'; generateBtn.style.display = 'flex'; } }
+function selectSyncPoint(point, isSuggestion) {
+    selectedSyncPoint = point; 
+    if (userMarker) 
+        map.removeLayer(userMarker); 
+    if (suggestionMarker) 
+        map.removeLayer(suggestionMarker); 
+    const iconToUse = isSuggestion ? suggestionIcon : userIcon; 
+    const newMarker = L.marker([point.lat, point.lon], { icon: iconToUse }).addTo(map); 
+    if(isSuggestion) { suggestionMarker = newMarker; } else { userMarker = newMarker; } 
+    const pointTime = point.displayTime || new Date(point.time).toLocaleString(currentLang.startsWith('en') ? 'en-US' : 'pt-BR', { timeZone: 'UTC' });
+    syncPointInfo.textContent = t('sync_point_selected', { type: isSuggestion ? t('suggestion_type') : t('manual_type'), time: pointTime }); 
+    if (videoFile) { positionSection.style.display = 'block'; generateBtn.style.display = 'flex'; } 
+}
 
 // ==============================================
 // SISTEMA INLINE DE OVERLAYS - VERSÃO FINAL CORRIGIDA
