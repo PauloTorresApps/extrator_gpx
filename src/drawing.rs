@@ -5,7 +5,7 @@ use imageproc::point::Point;
 use imageproc::drawing::{draw_polygon_mut, draw_filled_circle_mut, draw_line_segment_mut, draw_text_mut};
 use rusttype::{Font, Scale};
 use gpx::Gpx;
-use chrono::{DateTime, Utc};
+use chrono::{DateTime, Utc, FixedOffset};
 use crate::utils::calculate_speed_kmh;
 
 pub fn generate_speedometer_image(speed_kmh: f64, bearing: f64, g_force: f64, elevation: f64, output_path: &str, lang: &str) -> Result<(), Box<dyn Error>> {
@@ -111,12 +111,12 @@ pub fn generate_speedometer_image(speed_kmh: f64, bearing: f64, g_force: f64, el
     Ok(())
 }
 
-// Nova função para gerar overlay de estatísticas
+// FUNÇÃO MODIFICADA: `generate_stats_image` agora converte o fuso horário e exibe a data
 pub fn generate_stats_image(
     distance_km: f64,
     altitude_m: f64,
     elevation_gain_m: f64,
-    current_time: DateTime<Utc>,
+    current_time_utc: DateTime<Utc>,
     output_path: &str,
     lang: &str,
 ) -> Result<(), Box<dyn Error>> {
@@ -135,6 +135,7 @@ pub fn generate_stats_image(
 
     let scale_label = Scale::uniform(16.0); 
     let scale_value = Scale::uniform(28.0);
+    let scale_sub_value = Scale::uniform(18.0); // Nova escala para a data
     let y_start = 15;
     let line_height = 60;
 
@@ -156,9 +157,15 @@ pub fn generate_stats_image(
     draw_text_mut(&mut img, white, 10, y_start + line_height * 2, scale_label, &font_bold, elevation_gain_label);
     draw_text_mut(&mut img, white, 10, y_start + line_height * 2 + 20, scale_value, &font_bold, &elevation_gain_value_unit);
 
-    // Horário
-    let time_text = current_time.format("%H:%M %p").to_string();
-    draw_text_mut(&mut img, white, 10, y_start + line_height * 3 + 5, scale_value, &font_bold, &time_text);
+    // Horário e Data
+    let brt_offset = FixedOffset::west_opt(3 * 3600).unwrap(); // Fuso horário UTC-3 (Horário de Brasília)
+    let local_time = current_time_utc.with_timezone(&brt_offset);
+
+    let time_text = local_time.format("%H:%M").to_string();
+    let date_text = local_time.format("%d/%m/%Y").to_string();
+
+    draw_text_mut(&mut img, white, 10, y_start + line_height * 3, scale_value, &font_bold, &time_text);
+    draw_text_mut(&mut img, white, 10, y_start + line_height * 3 + 25, scale_sub_value, &font_bold, &date_text);
 
     img.save(output_path)?;
     Ok(())
