@@ -8,7 +8,7 @@ use chrono::{DateTime, Utc};
 use gpx::{Gpx, Waypoint, read};
 use image::Rgba;
 use crate::drawing::{generate_speedometer_image, generate_track_map_image, generate_dot_image, generate_stats_image};
-use crate::utils::{calculate_speed_kmh, get_video_time_range, calculate_g_force, calculate_bearing, interpolate_gpx_points, calculate_distance_to_point, calculate_elevation_gain_to_point};
+use crate::utils::{calculate_speed_kmh, get_video_time_range, calculate_g_force, calculate_bearing, interpolate_gpx_points};
 
 pub struct FrameInfo {
     path: String,
@@ -163,7 +163,6 @@ fn process_internal(
     let dot_image_path = format!("{}/marker_dot.png", map_assets_dir);
     if add_track_overlay {
         logs.push(t("generating_track_image", lang));
-        // MODIFICAÇÃO: O parâmetro `line_color` foi removido.
         generate_track_map_image(&gpx, 300, 300, &map_image_path, Rgba([0, 0, 0, 100]), 2.0)?;
         generate_dot_image(&dot_image_path, 8, Rgba([255, 0, 0, 255]))?;
         logs.push(t("map_assets_generated", lang));
@@ -175,11 +174,12 @@ fn process_internal(
         let mut frame_counter = 0;
         let mut stats_frame_counter = 0;
         
-        // Coletar todos os pontos para cálculos de estatísticas
-        let all_points: Vec<&Waypoint> = gpx.tracks.iter()
-            .flat_map(|t| t.segments.iter())
-            .flat_map(|s| s.points.iter())
-            .collect();
+        // --- INÍCIO DAS MODIFICAÇÕES ---
+        // Variáveis para acumular distância e ganho de elevação APENAS para o vídeo.
+        let mut video_distance_m: f64 = 0.0;
+        let mut video_elevation_gain_m: f64 = 0.0;
+        let mut last_video_point: Option<&Waypoint> = None;
+        // --- FIM DAS MODIFICAÇÕES ---
 
         for track in gpx.tracks.iter() {
             for segment in track.segments.iter() {
@@ -191,6 +191,8 @@ fn process_internal(
                     if let Some(time_str) = p2.time.as_ref().and_then(|t| t.format().ok()) {
                         if let Ok(point_time) = time_str.parse::<DateTime<Utc>>() {
                             let adjusted_point_time = point_time - time_offset;
+
+                            // Verifica se o ponto está dentro do intervalo do vídeo
                             if adjusted_point_time >= video_start_time && adjusted_point_time <= video_end_time {
                                 let mut speedo_output_path = String::new();
                                 let mut stats_output_path = None;
@@ -208,14 +210,28 @@ fn process_internal(
                                 }
 
                                 if add_stats_overlay {
-                                    let current_point_index = all_points.iter().position(|&p| {
-                                        p.point().x() == p2.point().x() && p.point().y() == p2.point().y() && p.time == p2.time
-                                    }).unwrap_or(0);
-                                    let distance_km = calculate_distance_to_point(&all_points, current_point_index);
-                                    let elevation_gain_m = calculate_elevation_gain_to_point(&all_points, current_point_index);
+                                    // --- INÍCIO DA LÓGICA DE CÁLCULO INCREMENTAL ---
+                                    if let Some(last_p) = last_video_point {
+                                        // Acumula a distância 2D
+                                        video_distance_m += crate::utils::distance_2d(last_p, p2);
+                                        
+                                        // Acumula o ganho de elevação
+                                        if let (Some(last_elev), Some(curr_elev)) = (last_p.elevation, p2.elevation) {
+                                            if curr_elev > last_elev {
+                                                video_elevation_gain_m += curr_elev - last_elev;
+                                            }
+                                        }
+                                    }
+                                    // Atualiza o último ponto do vídeo
+                                    last_video_point = Some(p2);
+                                    // --- FIM DA LÓGICA DE CÁLCULO INCREMENTAL ---
+
+                                    let distance_km = video_distance_m / 1000.0;
                                     let altitude_m = p2.elevation.unwrap_or(0.0);
                                     let stats_path = format!("{}/stats_frame_{:05}.png", stats_output_dir, stats_frame_counter);
-                                    generate_stats_image(distance_km, altitude_m, elevation_gain_m, point_time, &stats_path, lang)?;
+                                    
+                                    // Usa a variável de ganho de elevação do vídeo
+                                    generate_stats_image(distance_km, altitude_m, video_elevation_gain_m, point_time, &stats_path, lang)?;
                                     stats_output_path = Some(stats_path);
                                     stats_frame_counter += 1;
                                 }

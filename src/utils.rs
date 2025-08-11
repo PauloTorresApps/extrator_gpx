@@ -49,7 +49,7 @@ pub fn get_video_time_range(video_path: &Path, lang: &str) -> Result<(DateTime<U
     Ok((start_time_utc, start_time_utc + duration))
 }
 
-fn distance_2d(p1: &Waypoint, p2: &Waypoint) -> f64 {
+pub fn distance_2d(p1: &Waypoint, p2: &Waypoint) -> f64 {
     const EARTH_RADIUS_METERS: f64 = 6371000.0;
     let lat1 = p1.point().y().to_radians(); 
     let lon1 = p1.point().x().to_radians();
@@ -126,32 +126,6 @@ pub fn calculate_bearing(p1: &Waypoint, p2: &Waypoint) -> f64 {
     let initial_bearing_deg = initial_bearing_rad.to_degrees();
     
     (initial_bearing_deg + 360.0) % 360.0
-}
-
-// Função para calcular distância acumulada até um ponto específico
-pub fn calculate_distance_to_point(all_points: &[&Waypoint], current_index: usize) -> f64 {
-    let mut distance = 0.0;
-    
-    for i in 1..=current_index.min(all_points.len() - 1) {
-        distance += distance_2d(all_points[i-1], all_points[i]);
-    }
-    
-    distance / 1000.0 // Converter para km
-}
-
-// Nova função para calcular ganho de elevação até um ponto específico
-pub fn calculate_elevation_gain_to_point(all_points: &[&Waypoint], current_index: usize) -> f64 {
-    let mut gain = 0.0;
-    
-    for i in 1..=current_index.min(all_points.len() - 1) {
-        if let (Some(prev_elev), Some(curr_elev)) = (all_points[i-1].elevation, all_points[i].elevation) {
-            if curr_elev > prev_elev {
-                gain += curr_elev - prev_elev;
-            }
-        }
-    }
-    
-    gain
 }
 
 fn interpolate_points(p1: &Waypoint, p2: &Waypoint, max_interval_secs: i64) -> Vec<Waypoint> {
