@@ -6,6 +6,7 @@ use imageproc::drawing::{draw_polygon_mut, draw_filled_circle_mut, draw_line_seg
 use rusttype::{Font, Scale};
 use gpx::Gpx;
 use chrono::{DateTime, Utc};
+use crate::utils::calculate_speed_kmh;
 
 pub fn generate_speedometer_image(speed_kmh: f64, bearing: f64, g_force: f64, elevation: f64, output_path: &str, lang: &str) -> Result<(), Box<dyn Error>> {
     const SCALE_FACTOR: u32 = 4;
@@ -105,8 +106,8 @@ pub fn generate_speedometer_image(speed_kmh: f64, bearing: f64, g_force: f64, el
         FINAL_IMG_SIZE,
         FilterType::Lanczos3,
     );
-
     final_img.save(output_path)?;
+
     Ok(())
 }
 
@@ -121,60 +122,58 @@ pub fn generate_stats_image(
 ) -> Result<(), Box<dyn Error>> {
     const WIDTH: u32 = 220;
     const HEIGHT: u32 = 250;
-    
     let mut img = RgbaImage::new(WIDTH, HEIGHT);
-    
+
     // Fundo transparente
     for pixel in img.pixels_mut() {
         *pixel = Rgba([0, 0, 0, 0]);
     }
-    
+
     let white = Rgba([255, 255, 255, 255]);
-    
     let font_data_bold = include_bytes!("../DejaVuSans-Bold.ttf");
     let font_bold = Font::try_from_bytes(&font_data_bold[..]).ok_or("Falha ao carregar a fonte em negrito")?;
-    
-    let scale_label = Scale::uniform(16.0);  // Aumentado de 14.0 para 16.0
-    let scale_value = Scale::uniform(28.0);  // Aumentado de 24.0 para 28.0
-    
+
+    let scale_label = Scale::uniform(16.0); 
+    let scale_value = Scale::uniform(28.0);
     let y_start = 15;
     let line_height = 60;
-    
+
     // Distância
     let distance_label = if lang == "en" { "DISTANCE" } else { "DISTÂNCIA" };
     let distance_value_unit = format!("{:.1} KM", distance_km);
     draw_text_mut(&mut img, white, 10, y_start, scale_label, &font_bold, distance_label);
     draw_text_mut(&mut img, white, 10, y_start + 20, scale_value, &font_bold, &distance_value_unit);
-    
+
     // Altitude
     let altitude_label = if lang == "en" { "ALTITUDE" } else { "ALTITUDE" };
     let altitude_value_unit = format!("{:.0} M", altitude_m);
     draw_text_mut(&mut img, white, 10, y_start + line_height, scale_label, &font_bold, altitude_label);
     draw_text_mut(&mut img, white, 10, y_start + line_height + 20, scale_value, &font_bold, &altitude_value_unit);
-    
+
     // Ganho de elevação
     let elevation_gain_label = if lang == "en" { "ELEVATION GAIN" } else { "GANHO DE ELEVAÇÃO" };
     let elevation_gain_value_unit = format!("{:.0} M", elevation_gain_m);
     draw_text_mut(&mut img, white, 10, y_start + line_height * 2, scale_label, &font_bold, elevation_gain_label);
     draw_text_mut(&mut img, white, 10, y_start + line_height * 2 + 20, scale_value, &font_bold, &elevation_gain_value_unit);
-    
+
     // Horário
     let time_text = current_time.format("%H:%M %p").to_string();
     draw_text_mut(&mut img, white, 10, y_start + line_height * 3 + 5, scale_value, &font_bold, &time_text);
-    
+
     img.save(output_path)?;
     Ok(())
 }
+
 
 pub fn generate_dot_image(path: &str, size: u32, color: Rgba<u8>) -> Result<(), Box<dyn Error>> {
     let mut img = RgbaImage::new(size, size);
     let center = (size as i32 / 2, size as i32 / 2);
     let radius = (size / 2) as i32 - (size as i32 / 10);
-    
+
     for pixel in img.pixels_mut() {
         *pixel = Rgba([0, 0, 0, 0]);
     }
-
+    
     draw_filled_circle_mut(&mut img, center, radius, color);
     img.save(path)?;
     Ok(())
@@ -191,10 +190,10 @@ fn draw_thick_line_segment_mut(
     let dy = end.1 - start.1;
     let length = (dx * dx + dy * dy).sqrt();
     if length < 1e-6 { return; }
-    
+
     let nx = dx / length;
     let ny = dy / length;
-    
+
     let px = -ny;
     let py = nx;
 
@@ -208,41 +207,83 @@ fn draw_thick_line_segment_mut(
     draw_polygon_mut(image, &[p1, p2, p3, p4], color);
 }
 
-pub fn generate_track_map_image(
-    gpx: &Gpx, 
-    width: u32, 
-    height: u32, 
-    path: &str, 
-    background_color: Rgba<u8>, 
-    line_color: Rgba<u8>,
-    line_thickness: f32,
-) -> Result<(), Box<dyn Error>> {
-    let points: Vec<_> = gpx.tracks.iter()
-        .flat_map(|t| t.segments.iter())
-        .flat_map(|s| s.points.iter())
-        .map(|p| p.point())
-        .collect();
-
-    if points.is_empty() {
-        return Err("GPX não contém pontos para desenhar.".into());
+// NOVA FUNÇÃO: Gera a cor com base na velocidade para o mapa de calor
+fn speed_to_gradient_color(speed: f64, min_speed: f64, max_speed: f64) -> Rgba<u8> {
+    if max_speed <= min_speed {
+        return Rgba([0, 0, 255, 255]); // Azul por defeito se não houver variação
     }
 
-    let (min_lon, max_lon, min_lat, max_lat) = points.iter().fold(
-        (points[0].x(), points[0].x(), points[0].y(), points[0].y()),
+    // Normaliza a velocidade entre 0.0 e 1.0
+    let ratio = (speed - min_speed) / (max_speed - min_speed);
+
+    // Define as cores para o gradiente
+    let blue = [0.0, 0.0, 255.0];
+    let green = [0.0, 255.0, 0.0];
+    let yellow = [255.0, 255.0, 0.0];
+    let orange = [255.0, 165.0, 0.0];
+    let red = [255.0, 0.0, 0.0];
+
+    let (r, g, b) = if ratio < 0.25 { // Azul para Verde
+        let t = ratio * 4.0;
+        (blue[0] * (1.0 - t) + green[0] * t, blue[1] * (1.0 - t) + green[1] * t, blue[2] * (1.0 - t) + green[2] * t)
+    } else if ratio < 0.5 { // Verde para Amarelo
+        let t = (ratio - 0.25) * 4.0;
+        (green[0] * (1.0 - t) + yellow[0] * t, green[1] * (1.0 - t) + yellow[1] * t, green[2] * (1.0 - t) + yellow[2] * t)
+    } else if ratio < 0.75 { // Amarelo para Laranja
+        let t = (ratio - 0.5) * 4.0;
+        (yellow[0] * (1.0 - t) + orange[0] * t, yellow[1] * (1.0 - t) + orange[1] * t, yellow[2] * (1.0 - t) + orange[2] * t)
+    } else { // Laranja para Vermelho
+        let t = (ratio - 0.75) * 4.0;
+        (orange[0] * (1.0 - t) + red[0] * t, orange[1] * (1.0 - t) + red[1] * t, orange[2] * (1.0 - t) + red[2] * t)
+    };
+
+    Rgba([r as u8, g as u8, b as u8, 255])
+}
+
+
+// FUNÇÃO MODIFICADA: `generate_track_map_image` agora usa o gradiente de cores
+pub fn generate_track_map_image(
+    gpx: &Gpx,
+    width: u32,
+    height: u32,
+    path: &str,
+    background_color: Rgba<u8>,
+    line_thickness: f32,
+) -> Result<(), Box<dyn Error>> {
+    let all_points: Vec<_> = gpx.tracks.iter()
+        .flat_map(|t| t.segments.iter())
+        .flat_map(|s| s.points.iter())
+        .collect();
+
+    if all_points.len() < 2 {
+        return Err("GPX não contém pontos suficientes para desenhar.".into());
+    }
+
+    // Calcula todas as velocidades para encontrar o mínimo e o máximo
+    let speeds: Vec<Option<f64>> = all_points
+        .windows(2)
+        .map(|p| calculate_speed_kmh(p[0], p[1]))
+        .collect();
+    
+    let valid_speeds: Vec<f64> = speeds.iter().filter_map(|&s| s).collect();
+    let min_speed = if valid_speeds.is_empty() { 0.0 } else { valid_speeds.iter().fold(f64::INFINITY, |a, &b| a.min(b)) };
+    let max_speed = if valid_speeds.is_empty() { 0.0 } else { valid_speeds.iter().fold(f64::NEG_INFINITY, |a, &b| a.max(b)) };
+
+    let (min_lon, max_lon, min_lat, max_lat) = all_points.iter().fold(
+        (all_points[0].point().x(), all_points[0].point().x(), all_points[0].point().y(), all_points[0].point().y()),
         |(min_x, max_x, min_y, max_y), p| {
-            (min_x.min(p.x()), max_x.max(p.x()), min_y.min(p.y()), max_y.max(p.y()))
+            (min_x.min(p.point().x()), max_x.max(p.point().x()), min_y.min(p.point().y()), max_y.max(p.point().y()))
         }
     );
 
     let mut img = RgbaImage::from_pixel(width, height, background_color);
-    
     let padding = 20.0;
     let map_width = width as f64 - 2.0 * padding;
     let map_height = height as f64 - 2.0 * padding;
 
     let lon_range = max_lon - min_lon;
     let lat_range = max_lat - min_lat;
-    
+
     let scale_x = if lon_range.abs() > 1e-9 { map_width / lon_range } else { 0.0 };
     let scale_y = if lat_range.abs() > 1e-9 { map_height / lat_range } else { 0.0 };
     let scale = scale_x.min(scale_y);
@@ -253,23 +294,30 @@ pub fn generate_track_map_image(
         (x as f32, y as f32)
     };
 
+    let mut point_idx = 0;
     for track in &gpx.tracks {
         for segment in &track.segments {
             for pair in segment.points.windows(2) {
-                let p1 = pair[0].point();
-                let p2 = pair[1].point();
-                
-                let (x1, y1) = get_pixel_coords(p1.x(), p1.y());
-                let (x2, y2) = get_pixel_coords(p2.x(), p2.y());
+                let p1 = &pair[0]; // CORRIGIDO: Emprestando o valor
+                let p2 = &pair[1]; // CORRIGIDO: Emprestando o valor
+                let (x1, y1) = get_pixel_coords(p1.point().x(), p1.point().y());
+                let (x2, y2) = get_pixel_coords(p2.point().x(), p2.point().y());
+
+                let line_color = match speeds.get(point_idx).and_then(|s| *s) {
+                    Some(speed) => speed_to_gradient_color(speed, min_speed, max_speed),
+                    None => Rgba([0, 0, 255, 255]), // Azul por defeito
+                };
                 
                 draw_thick_line_segment_mut(&mut img, (x1, y1), (x2, y2), line_thickness, line_color);
+                point_idx += 1;
             }
         }
     }
-    
+
     img.save(path)?;
     Ok(())
 }
+
 
 fn draw_arc_mut(image: &mut RgbaImage, center: (i32, i32), radius: i32, start_angle_deg: f64, sweep_angle_deg: f64, color: Rgba<u8>, thickness: i32) {
     let steps = (sweep_angle_deg.abs() * 2.0).ceil() as i32;
@@ -283,10 +331,16 @@ fn draw_arc_mut(image: &mut RgbaImage, center: (i32, i32), radius: i32, start_an
 }
 
 fn rotate_point(point: Point<i32>, center: (i32, i32), angle_rad: f32) -> Point<i32> {
-    let s = angle_rad.sin(); let c = angle_rad.cos();
-    let px = (point.x - center.0) as f32; let py = (point.y - center.1) as f32;
-    let x_new = px * c - py * s; let y_new = px * s + py * c;
-    Point { x: (x_new + center.0 as f32) as i32, y: (y_new + center.1 as f32) as i32 }
+    let s = angle_rad.sin();
+    let c = angle_rad.cos();
+    let px = (point.x - center.0) as f32;
+    let py = (point.y - center.1) as f32;
+    let x_new = px * c - py * s;
+    let y_new = px * s + py * c;
+    Point {
+        x: (x_new + center.0 as f32) as i32,
+        y: (y_new + center.1 as f32) as i32
+    }
 }
 
 fn draw_centered_text_mut(img: &mut RgbaImage, color: Rgba<u8>, x: i32, y: i32, scale: Scale, font: &Font, text: &str) {
@@ -305,14 +359,26 @@ fn draw_centered_text_mut(img: &mut RgbaImage, color: Rgba<u8>, x: i32, y: i32, 
 }
 
 fn speed_to_color(speed: f64, max_speed: f64) -> Rgba<u8> {
-    let ratio = (speed / max_speed).min(1.0); 
-    let green = [127.0, 255.0, 0.0]; let yellow = [255.0, 255.0, 0.0]; let red = [255.0, 0.0, 0.0];
+    let ratio = (speed / max_speed).min(1.0);
+    let green = [127.0, 255.0, 0.0];
+    let yellow = [255.0, 255.0, 0.0];
+    let red = [255.0, 0.0, 0.0];
+
     let (r, g, b) = if ratio < 0.5 {
         let t = ratio * 2.0;
-        (green[0] * (1.0 - t) + yellow[0] * t, green[1] * (1.0 - t) + yellow[1] * t, green[2] * (1.0 - t) + yellow[2] * t)
+        (
+            green[0] * (1.0 - t) + yellow[0] * t,
+            green[1] * (1.0 - t) + yellow[1] * t,
+            green[2] * (1.0 - t) + yellow[2] * t,
+        )
     } else {
         let t = (ratio - 0.5) * 2.0;
-        (yellow[0] * (1.0 - t) + red[0] * t, yellow[1] * (1.0 - t) + red[1] * t, yellow[2] * (1.0 - t) + red[2] * t)
+        (
+            yellow[0] * (1.0 - t) + red[0] * t,
+            yellow[1] * (1.0 - t) + red[1] * t,
+            yellow[2] * (1.0 - t) + red[2] * t,
+        )
     };
+
     Rgba([r as u8, g as u8, b as u8, 255])
 }
