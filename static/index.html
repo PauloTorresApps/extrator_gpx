@@ -184,6 +184,14 @@
         <div id="logs-container"><h3><span data-i18n="logs_title">📋 Logs do Processamento:</span></h3><pre id="logs"></pre></div>
     </div>
 
-    <script type="module" src="script.js" defer></script>
+     <!-- JavaScript Modules - Ordem de carregamento é importante -->
+    <script src="js/translations.js"></script>
+    <script src="js/notifications.js"></script>
+    <script src="js/loading.js"></script>
+    <script src="js/overlay-manager.js"></script>
+    <script src="js/map-manager.js"></script>
+    <script src="js/file-handlers.js"></script>
+    <script src="js/video-processor.js"></script>
+    <script src="js/app-init.js"></script>
 </body>
 </html>
