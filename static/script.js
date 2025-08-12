@@ -1,7 +1,7 @@
 // --- Seção de Tradução (com loading) ---
 const translations = {
     'en': {
-        'main_title': '🎬 Interactive GPX + Video Sync',
+        'main_title': '🎬 GPX Video Sync',
         'intro_text': 'Upload your files, select a sync point on the map, and configure the overlays to generate your final video with telemetry.',
         'step1_title': 'Select Files', 'gpx_file_label': 'GPX File', 'choose_gpx': 'Choose GPX', 'no_gpx_selected': 'No file selected', 'video_file_label': 'Video File', 'choose_video': 'Choose Video', 'select_gpx_first': 'Select a GPX file first',
         'step2_title': 'Select Sync Point', 'map_click_prompt': '🎯 Click a point on the map to set it as the sync start.', 'step3_title': 'Positioning', 'speedo_label': '⏱️ Speedometer', 'map_label': '🗺️ Track Map', 'stats_label': '📊 Statistics',
@@ -36,7 +36,7 @@ const translations = {
         'settings_tooltip': 'Settings'
     },
     'pt-BR': {
-        'main_title': '🎬 Sincronização Interativa GPX + Vídeo',
+        'main_title': '🎬 GPX Video Sync',
         'intro_text': 'Carregue os seus ficheiros, selecione um ponto de sincronização no mapa e configure os overlays para gerar o seu vídeo final com telemetria.',
         'step1_title': 'Selecionar Ficheiros', 'gpx_file_label': 'Ficheiro GPX', 'choose_gpx': 'Escolher GPX', 'no_gpx_selected': 'Nenhum ficheiro selecionado', 'video_file_label': 'Ficheiro de Vídeo', 'choose_video': 'Escolher Vídeo', 'select_gpx_first': 'Selecione um ficheiro GPX primeiro',
         'step2_title': 'Selecionar Ponto de Sincronização', 'map_click_prompt': '🎯 Clique num ponto no mapa para o definir como o início da sincronização.', 'step3_title': 'Posicionamento', 'speedo_label': '⚙️ Velocímetro', 'map_label': '🗺️ Mapa do Trajeto', 'stats_label': '📊 Estatísticas',
