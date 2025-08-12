@@ -682,7 +682,53 @@ input[type="file"]:disabled + .file-upload-label {
     font-size: 1rem; 
 }
 
-/* SISTEMA INLINE DE OVERLAYS */
+/* BOTÃO DE DOWNLOAD DISCRETO */
+.download-btn {
+    position: fixed;
+    top: 1rem;
+    right: 6rem; /* Ao lado do seletor de idioma */
+    background: rgba(76, 175, 80, 0.9);
+    backdrop-filter: blur(10px);
+    border: 1px solid var(--success-color);
+    color: white;
+    width: 44px;
+    height: 44px;
+    border-radius: 50%;
+    cursor: pointer;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.3s ease;
+    z-index: 1001;
+    text-decoration: none;
+    font-size: 1.2rem;
+    box-shadow: 0 4px 12px rgba(76, 175, 80, 0.3);
+    animation: downloadPulse 2s infinite;
+}
+
+.download-btn:hover {
+    background: var(--success-color);
+    transform: translateY(-2px) scale(1.05);
+    box-shadow: 0 6px 20px rgba(76, 175, 80, 0.4);
+}
+
+.download-btn.show {
+    display: flex;
+}
+
+@keyframes downloadPulse {
+    0%, 100% { 
+        box-shadow: 0 4px 12px rgba(76, 175, 80, 0.3), 0 0 0 0 rgba(76, 175, 80, 0.7); 
+    }
+    50% { 
+        box-shadow: 0 4px 12px rgba(76, 175, 80, 0.3), 0 0 0 8px rgba(76, 175, 80, 0); 
+    }
+}
+
+/* Remover o antigo download-link */
+#download-link { 
+    display: none !important;
+}
 .overlays-config-container {
     display: flex;
     align-items: center;
@@ -1098,9 +1144,23 @@ input[type="file"]:disabled + .file-upload-label {
         border-width: 1px;
     }
     
-    .position-indicator {
-        width: 14px;
-        height: 10px;
-        font-size: 0.5rem;
+    /* Botão de download responsivo */
+    .download-btn {
+        top: 1rem;
+        right: 1rem;
+        left: auto;
+        width: 40px;
+        height: 40px;
+        font-size: 1rem;
+    }
+    
+    /* Ajustar lang-switcher para dar espaço ao download */
+    .lang-switcher {
+        right: 4.5rem;
+        font-size: 0.85rem;
+    }
+    
+    .lang-switcher button {
+        padding: 0.4rem 0.8rem;
     }
 }

@@ -31,18 +31,19 @@ const translations = {
         'step_sync': 'Synchronizing with video',
         'step_overlays': 'Applying overlays',
         'step_render': 'Rendering final video',
-        'loading_cancel': 'Cancel Processing'
+        'loading_cancel': 'Cancel Processing',
+        'download_tooltip': 'Download ready video'
     },
     'pt-BR': {
         'main_title': '🎬 Sincronização Interativa GPX + Vídeo',
-        'intro_text': 'Carregue os seus arquivos, selecione um ponto de sincronização no mapa e configure os overlays para gerar o seu vídeo final com telemetria.',
-        'step1_title': 'Selecionar Arquivos', 'gpx_file_label': 'Arquivo GPX', 'choose_gpx': 'Escolher GPX', 'no_gpx_selected': 'Nenhum arquivo selecionado', 'video_file_label': 'Arquivo de Vídeo', 'choose_video': 'Escolher Vídeo', 'select_gpx_first': 'Selecione um arquivo GPX primeiro',
-        'step2_title': 'Selecionar Ponto de Sincronização', 'map_click_prompt': '🎯 Clique num ponto no mapa para o definir como o início da sincronização.', 'step3_title': 'Posicionamento', 'speedo_label': '⏱️ Velocímetro', 'map_label': '🗺️ Mapa do Trajeto', 'stats_label': '📊 Estatísticas',
+        'intro_text': 'Carregue os seus ficheiros, selecione um ponto de sincronização no mapa e configure os overlays para gerar o seu vídeo final com telemetria.',
+        'step1_title': 'Selecionar Ficheiros', 'gpx_file_label': 'Ficheiro GPX', 'choose_gpx': 'Escolher GPX', 'no_gpx_selected': 'Nenhum ficheiro selecionado', 'video_file_label': 'Ficheiro de Vídeo', 'choose_video': 'Escolher Vídeo', 'select_gpx_first': 'Selecione um ficheiro GPX primeiro',
+        'step2_title': 'Selecionar Ponto de Sincronização', 'map_click_prompt': '🎯 Clique num ponto no mapa para o definir como o início da sincronização.', 'step3_title': 'Posicionamento', 'speedo_label': '⚙️ Velocímetro', 'map_label': '🗺️ Mapa do Trajeto', 'stats_label': '📊 Estatísticas',
         'generate_button': 'Confirmar e Gerar Vídeo', 'download_link': '📥 Descarregar Vídeo Final', 'logs_title': '📋 Logs do Processamento:',
-        'gpx_loaded': 'Arquivo GPX carregado com sucesso', 'can_select_video': 'Agora pode selecionar o arquivo de vídeo', 'analyzing_files': 'Analisando arquivos para sugerir ponto e percurso...', 'high_precision_track_loaded': 'Percurso de alta precisão carregado do servidor.',
+        'gpx_loaded': 'Ficheiro GPX carregado com sucesso', 'can_select_video': 'Agora pode selecionar o ficheiro de vídeo', 'analyzing_files': 'Analisando ficheiros para sugerir ponto e percurso...', 'high_precision_track_loaded': 'Percurso de alta precisão carregado do servidor.',
         'suggestion_applied': 'Sugestão automática aplicada! Pode ajustar no mapa se necessário.', 'suggestion_error': 'Não foi possível obter sugestão: {{message}}. Selecione um ponto manualmente.', 'suggestion_comm_error': 'Erro de comunicação ao obter sugestão. Selecione um ponto manualmente.',
-        'sync_point_selected': 'Ponto selecionado ({{type}}): {{time}} (UTC)', 'manual_type': 'manual', 'suggestion_type': 'sugestão', 'error_missing_files': 'Erro: Por favor, selecione os dois arquivos e um ponto de sincronização.',
-        'uploading_files': 'A enviar arquivos...', 'success_message': 'Sucesso! O seu vídeo está pronto.', 'server_error': 'Erro: {{message}}', 'network_error': 'Erro de rede ao enviar os arquivos.',
+        'sync_point_selected': 'Ponto selecionado ({{type}}): {{time}} (UTC)', 'manual_type': 'manual', 'suggestion_type': 'sugestão', 'error_missing_files': 'Erro: Por favor, selecione os dois ficheiros e um ponto de sincronização.',
+        'uploading_files': 'A enviar ficheiros...', 'success_message': 'Sucesso! O seu vídeo está pronto.', 'server_error': 'Erro: {{message}}', 'network_error': 'Erro de rede ao enviar os ficheiros.',
         'settings_title': 'Configurações Avançadas', 'interpolation_label': 'Nível de Precisão da Interpolação', 'interpolation_desc': 'Menor valor = mais pontos = maior precisão e processamento mais lento.',
         'speedo_hint': 'Exibe um velocímetro com a velocidade atual no vídeo.',
         'map_hint': 'Mostra um mini-mapa com o trajeto percorrido e a posição atual.',
@@ -64,7 +65,8 @@ const translations = {
         'step_sync': 'Sincronizando com vídeo',
         'step_overlays': 'Aplicando overlays',
         'step_render': 'Renderizando vídeo final',
-        'loading_cancel': 'Cancelar Processamento'
+        'loading_cancel': 'Cancelar Processamento',
+        'download_tooltip': 'Baixar vídeo pronto'
     }
 };
 
@@ -94,6 +96,11 @@ function setLanguage(lang) {
     });
     document.getElementById('lang-pt').classList.toggle('active', lang === 'pt-BR');
     document.getElementById('lang-en').classList.toggle('active', lang === 'en');
+    
+    // Atualizar tooltip do botão de download
+    if (downloadBtn) {
+        downloadBtn.title = t('download_tooltip');
+    }
 }
 
 // === SISTEMA DE NOTIFICAÇÕES ===
@@ -321,8 +328,7 @@ const videoInput = document.getElementById('video-file');
 const generateBtn = document.getElementById('generate-btn');
 const logsContainer = document.getElementById('logs-container');
 const logsPre = document.getElementById('logs');
-const downloadDiv = document.getElementById('download-link');
-const downloadLink = downloadDiv.querySelector('a');
+const downloadBtn = document.getElementById('download-btn'); // Novo botão discreto
 const syncPointInfo = document.getElementById('sync-point-info');
 const gpxInfo = document.getElementById('gpx-info');
 const videoInfo = document.getElementById('video-info');
@@ -786,7 +792,7 @@ function handleGenerateWithInlineOverlays() {
     
     // Ocultar elementos da UI desnecessários durante o processamento
     logsContainer.style.display = 'none';
-    downloadDiv.style.display = 'none';
+    downloadBtn.classList.remove('show'); // Ocultar botão de download
     
     const formData = new FormData();
     formData.append('gpxFile', gpxFile);
@@ -833,8 +839,8 @@ function handleGenerateWithInlineOverlays() {
         if (xhr.status >= 200 && xhr.status < 300) {
             notify.success(t('notification_success'), t('success_message'));
             if (result.download_url) { 
-                downloadLink.href = result.download_url; 
-                downloadDiv.style.display = 'block'; 
+                downloadBtn.href = result.download_url;
+                downloadBtn.classList.add('show'); // Mostrar botão discreto
             }
         } else {
             notify.error(t('notification_error'), t('server_error', { message: result.message || 'Unknown error' }));
