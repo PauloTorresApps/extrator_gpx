@@ -409,7 +409,7 @@ body {
 .lang-switcher {
     position: absolute;
     top: 1rem;
-    right: 1.5rem;
+    right: 1rem; /* Verificando: está em 1rem do canto direito */
     display: flex;
     gap: 0.5rem;
     background: rgba(0,0,0,0.3);
@@ -686,7 +686,7 @@ input[type="file"]:disabled + .file-upload-label {
 .download-btn {
     position: fixed;
     top: 1rem;
-    right: 6rem; /* Ao lado do seletor de idioma */
+    right: 5rem; /* Ajustado para a nova posição do lang-switcher */
     background: rgba(76, 175, 80, 0.9);
     backdrop-filter: blur(10px);
     border: 1px solid var(--success-color);
@@ -925,8 +925,8 @@ input[type="file"]:disabled + .file-upload-label {
 /* MODAL DE CONFIGURAÇÕES */
 .settings-btn {
     position: absolute;
-    top: 1rem;
-    left: 1.5rem;
+    top: -1rem;
+    left: -1rem;  /* Agora igual à distância do lang-switcher (1rem) */
     background: rgba(0,0,0,0.3);
     border: 1px solid var(--border-color);
     color: var(--text-color);
@@ -939,11 +939,57 @@ input[type="file"]:disabled + .file-upload-label {
     justify-content: center;
     transition: all 0.3s ease;
     z-index: 10;
+    position: relative;
 }
 
 .settings-btn:hover {
     background: var(--hover-color);
     transform: rotate(45deg);
+}
+
+/* Tooltip para o botão de configurações */
+.settings-btn::after {
+    content: attr(data-tooltip);
+    position: absolute;
+    bottom: -2.5rem;
+    left: 50%;
+    transform: translateX(-50%);
+    background: rgba(0, 0, 0, 0.9);
+    color: white;
+    padding: 0.5rem 0.75rem;
+    border-radius: 6px;
+    font-size: 0.8rem;
+    font-weight: 500;
+    white-space: nowrap;
+    opacity: 0;
+    visibility: hidden;
+    transition: all 0.3s ease;
+    pointer-events: none;
+    z-index: 1000;
+}
+
+.settings-btn::before {
+    content: '';
+    position: absolute;
+    bottom: -1.25rem;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 0;
+    height: 0;
+    border-left: 4px solid transparent;
+    border-right: 4px solid transparent;
+    border-bottom: 4px solid rgba(0, 0, 0, 0.9);
+    opacity: 0;
+    visibility: hidden;
+    transition: all 0.3s ease;
+    pointer-events: none;
+    z-index: 1000;
+}
+
+.settings-btn:hover::after,
+.settings-btn:hover::before {
+    opacity: 1;
+    visibility: visible;
 }
 
 .modal-overlay {

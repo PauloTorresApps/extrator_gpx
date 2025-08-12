@@ -32,7 +32,8 @@ const translations = {
         'step_overlays': 'Applying overlays',
         'step_render': 'Rendering final video',
         'loading_cancel': 'Cancel Processing',
-        'download_tooltip': 'Download ready video'
+        'download_tooltip': 'Download ready video',
+        'settings_tooltip': 'Settings'
     },
     'pt-BR': {
         'main_title': '🎬 Sincronização Interativa GPX + Vídeo',
@@ -66,7 +67,8 @@ const translations = {
         'step_overlays': 'Aplicando overlays',
         'step_render': 'Renderizando vídeo final',
         'loading_cancel': 'Cancelar Processamento',
-        'download_tooltip': 'Baixar vídeo pronto'
+        'download_tooltip': 'Baixar vídeo pronto',
+        'settings_tooltip': 'Configurações'
     }
 };
 
@@ -97,9 +99,14 @@ function setLanguage(lang) {
     document.getElementById('lang-pt').classList.toggle('active', lang === 'pt-BR');
     document.getElementById('lang-en').classList.toggle('active', lang === 'en');
     
-    // Atualizar tooltip do botão de download
+    // Atualizar tooltips
     if (downloadBtn) {
         downloadBtn.title = t('download_tooltip');
+    }
+    
+    const settingsBtn = document.getElementById('settings-btn');
+    if (settingsBtn) {
+        settingsBtn.setAttribute('data-tooltip', t('settings_tooltip'));
     }
 }
 
