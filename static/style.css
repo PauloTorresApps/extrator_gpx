@@ -10,6 +10,7 @@
     --success-color: #4caf50;
     --warning-color: #ff9800;
     --error-color: #f44336;
+    --info-color: #2196f3;
 }
 * { margin: 0; padding: 0; box-sizing: border-box; }
 body {
@@ -39,6 +40,145 @@ body {
     position: relative;
 }
 @keyframes fadeIn { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
+
+/* === SISTEMA DE NOTIFICAÇÕES === */
+.notifications-container {
+    position: fixed;
+    top: 2rem;
+    right: 2rem;
+    z-index: 9999;
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+    pointer-events: none;
+    max-width: 400px;
+}
+
+.notification {
+    background: rgba(30, 30, 30, 0.95);
+    backdrop-filter: blur(15px);
+    border-radius: 12px;
+    padding: 1rem 1.25rem;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4), 0 2px 16px rgba(0, 0, 0, 0.2);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    pointer-events: all;
+    transform: translateX(100%);
+    opacity: 0;
+    transition: all 0.4s cubic-bezier(0.68, -0.55, 0.265, 1.55);
+    position: relative;
+    overflow: hidden;
+    min-width: 320px;
+    word-wrap: break-word;
+}
+
+.notification.show {
+    transform: translateX(0);
+    opacity: 1;
+}
+
+.notification.hide {
+    transform: translateX(100%);
+    opacity: 0;
+    pointer-events: none;
+}
+
+.notification::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 4px;
+    height: 100%;
+    background: var(--primary-color);
+    transition: background-color 0.3s ease;
+}
+
+.notification.success::before { background: var(--success-color); }
+.notification.error::before { background: var(--error-color); }
+.notification.warning::before { background: var(--warning-color); }
+.notification.info::before { background: var(--info-color); }
+
+.notification-header {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    margin-bottom: 0.5rem;
+}
+
+.notification-icon {
+    font-size: 1.25rem;
+    flex-shrink: 0;
+    width: 24px;
+    height: 24px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.notification.success .notification-icon { color: var(--success-color); }
+.notification.error .notification-icon { color: var(--error-color); }
+.notification.warning .notification-icon { color: var(--warning-color); }
+.notification.info .notification-icon { color: var(--info-color); }
+
+.notification-title {
+    font-weight: 600;
+    font-size: 0.95rem;
+    color: var(--text-color);
+    flex-grow: 1;
+}
+
+.notification-close {
+    background: none;
+    border: none;
+    color: #999;
+    cursor: pointer;
+    font-size: 1.1rem;
+    padding: 0;
+    width: 20px;
+    height: 20px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+    transition: all 0.2s ease;
+    flex-shrink: 0;
+}
+
+.notification-close:hover {
+    background: rgba(255, 255, 255, 0.1);
+    color: var(--text-color);
+}
+
+.notification-message {
+    font-size: 0.9rem;
+    line-height: 1.4;
+    color: #ccc;
+    margin-left: 2rem;
+}
+
+/* Animação de progresso para auto-dismiss */
+.notification-progress {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    height: 2px;
+    background: rgba(255, 255, 255, 0.3);
+    width: 100%;
+    transform-origin: left;
+    animation: progressBar 5s linear forwards;
+}
+
+@keyframes progressBar {
+    from { transform: scaleX(1); }
+    to { transform: scaleX(0); }
+}
+
+.notification.success .notification-progress { background: var(--success-color); }
+.notification.error .notification-progress { background: var(--error-color); }
+.notification.warning .notification-progress { background: var(--warning-color); }
+.notification.info .notification-progress { background: var(--info-color); }
+
+/* === FIM DO SISTEMA DE NOTIFICAÇÕES === */
 
 .lang-switcher {
     position: absolute;
@@ -82,7 +222,6 @@ input[type="file"]:disabled + .file-upload-label { background: linear-gradient(1
 .files-container { display: grid; grid-template-columns: 1fr 1fr; gap: 2rem; }
 .file-group { display: flex; flex-direction: column; gap: 0.8rem; }
 .file-group-label { font-weight: 600; color: var(--primary-color); font-size: 1rem; }
-#status { text-align: center; padding: 1rem; background: rgba(42, 42, 42, 0.6); border-radius: 12px; border: 1px solid var(--border-color); font-weight: 500; }
 
 /* SISTEMA INLINE DE OVERLAYS - CORRIGIDO */
 .overlays-config-container {
@@ -397,6 +536,19 @@ input[type="file"]:disabled + .file-upload-label { background: linear-gradient(1
     #app { padding: 1rem; margin: 0.5rem; }
     h1 { font-size: 2rem; }
     .files-container { grid-template-columns: 1fr; gap: 1.5rem; }
+    
+    /* Notificações responsivas */
+    .notifications-container {
+        top: 1rem;
+        right: 1rem;
+        left: 1rem;
+        max-width: none;
+    }
+    
+    .notification {
+        min-width: unset;
+        width: 100%;
+    }
     
     .overlays-config-container {
         flex-direction: column;
