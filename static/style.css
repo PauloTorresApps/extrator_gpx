@@ -925,8 +925,8 @@ input[type="file"]:disabled + .file-upload-label {
 /* MODAL DE CONFIGURAÇÕES */
 .settings-btn {
     position: absolute;
-    top: -1rem;
-    left: -1rem;  /* Agora igual à distância do lang-switcher (1rem) */
+    top: 1rem;
+    left: 1rem;
     background: rgba(0,0,0,0.3);
     border: 1px solid var(--border-color);
     color: var(--text-color);
@@ -944,10 +944,18 @@ input[type="file"]:disabled + .file-upload-label {
 
 .settings-btn:hover {
     background: var(--hover-color);
+}
+
+/* Container interno para a rotação do ícone apenas */
+.settings-btn svg {
+    transition: transform 0.3s ease;
+}
+
+.settings-btn:hover svg {
     transform: rotate(45deg);
 }
 
-/* Tooltip para o botão de configurações */
+/* Tooltip para o botão de configurações - fora da rotação */
 .settings-btn::after {
     content: attr(data-tooltip);
     position: absolute;
@@ -963,7 +971,7 @@ input[type="file"]:disabled + .file-upload-label {
     white-space: nowrap;
     opacity: 0;
     visibility: hidden;
-    transition: all 0.3s ease;
+    transition: opacity 0.3s ease, visibility 0.3s ease;
     pointer-events: none;
     z-index: 1000;
 }
@@ -981,7 +989,7 @@ input[type="file"]:disabled + .file-upload-label {
     border-bottom: 4px solid rgba(0, 0, 0, 0.9);
     opacity: 0;
     visibility: hidden;
-    transition: all 0.3s ease;
+    transition: opacity 0.3s ease, visibility 0.3s ease;
     pointer-events: none;
     z-index: 1000;
 }
