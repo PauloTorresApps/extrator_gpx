@@ -1,0 +1,341 @@
+/* === SEÇÃO DE UPLOAD DE FICHEIROS === */
+.files-container { 
+    display: grid; 
+    grid-template-columns: 1fr 1fr; 
+    gap: 2rem; 
+}
+
+.file-group { 
+    display: flex; 
+    flex-direction: column; 
+    gap: 0.8rem; 
+}
+
+.file-group-label { 
+    font-weight: 600; 
+    color: var(--primary-color); 
+    font-size: 1rem; 
+}
+
+input[type="file"] { 
+    display: none; 
+}
+
+.file-upload-label { 
+    background: linear-gradient(135deg, var(--border-color), #555); 
+    color: var(--text-color); 
+    padding: 0.8rem 1.2rem; 
+    border-radius: 12px; 
+    cursor: pointer; 
+    transition: all 0.3s ease; 
+    font-weight: 500; 
+    text-align: center; 
+    display: flex; 
+    align-items: center; 
+    justify-content: center; 
+    gap: 0.5rem; 
+}
+
+.file-upload-label:hover { 
+    background: linear-gradient(135deg, #555, #666); 
+}
+
+input[type="file"]:disabled + .file-upload-label { 
+    background: linear-gradient(135deg, #333, #444); 
+    cursor: not-allowed; 
+    opacity: 0.6; 
+}
+
+.file-info { 
+    font-style: italic; 
+    color: #aaa; 
+    padding: 0.5rem; 
+    background: rgba(42, 42, 42, 0.5); 
+    border-radius: 8px; 
+    border: 1px dashed var(--border-color); 
+    font-size: 0.85rem; 
+    text-align: center; 
+}
+
+.track-info { 
+    background: rgba(42, 42, 42, 0.8); 
+    border: 1px solid rgba(3, 218, 198, 0.3); 
+    padding: 1rem; 
+    border-radius: 12px; 
+    font-size: 0.95rem; 
+    margin-top: 1rem; 
+    display: none; 
+    color: var(--secondary-color); 
+}
+
+/* === SEÇÃO DO MAPA === */
+#map { 
+    height: 400px; 
+    width: 100%; 
+    border-radius: 12px; 
+    background-color: var(--hover-color); 
+    border: 2px solid rgba(187, 134, 252, 0.2); 
+}
+
+#sync-point-info { 
+    text-align: center; 
+    font-size: 1rem; 
+    color: var(--secondary-color); 
+    display: none; 
+    min-height: 1.2em; 
+    background: rgba(3, 218, 198, 0.1); 
+    border: 1px solid rgba(3, 218, 198, 0.3); 
+    border-radius: 8px; 
+    padding: 0.8rem; 
+    margin-top: 1rem; 
+}
+
+/* === SEÇÃO DE OVERLAYS === */
+.overlays-config-container {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 1.5rem;
+    padding: 1rem;
+    background: rgba(0, 0, 0, 0.2);
+    border-radius: 12px;
+    flex-wrap: nowrap;
+    min-height: 80px;
+}
+
+.overlay-images-group {
+    display: flex;
+    gap: 1rem;
+    align-items: center;
+    flex-shrink: 0;
+}
+
+.overlay-image {
+    width: 60px;
+    height: 45px;
+    background: rgba(68, 68, 68, 0.5);
+    border: 2px solid var(--border-color);
+    border-radius: 6px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.5rem;
+    transition: all 0.3s ease;
+    position: relative;
+    user-select: none;
+}
+
+.overlay-image:hover {
+    border-color: var(--primary-color);
+    background: rgba(68, 68, 68, 0.7);
+    transform: translateY(-2px);
+}
+
+.overlay-image.active {
+    border-color: var(--success-color);
+    background: rgba(76, 175, 80, 0.2);
+}
+
+.overlay-image.selected {
+    border-color: var(--primary-color);
+    background: rgba(187, 134, 252, 0.3);
+    box-shadow: 0 0 0 2px rgba(187, 134, 252, 0.5);
+}
+
+.active-indicator {
+    position: absolute;
+    top: -3px;
+    right: -3px;
+    width: 12px;
+    height: 12px;
+    background: var(--success-color);
+    border: 2px solid white;
+    border-radius: 50%;
+    display: none;
+    z-index: 10;
+}
+
+.overlay-image.active .active-indicator {
+    display: block;
+}
+
+.position-indicator {
+    position: absolute;
+    bottom: 2px;
+    right: 2px;
+    width: 16px;
+    height: 12px;
+    background: var(--primary-color);
+    color: white;
+    font-size: 0.6rem;
+    font-weight: bold;
+    border-radius: 3px;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    z-index: 10;
+}
+
+.overlay-image.active .position-indicator {
+    display: flex;
+}
+
+.speedometer-img { 
+    background: radial-gradient(circle, rgba(187, 134, 252, 0.4) 0%, rgba(187, 134, 252, 0.2) 70%); 
+}
+
+.map-img { 
+    background: linear-gradient(45deg, rgba(3, 218, 198, 0.4) 0%, rgba(3, 218, 198, 0.2) 100%); 
+}
+
+.stats-img { 
+    background: linear-gradient(135deg, rgba(255, 193, 7, 0.4) 0%, rgba(255, 193, 7, 0.2) 100%); 
+}
+
+.overlay-separator {
+    width: 2px;
+    height: 50px;
+    background: linear-gradient(to bottom, transparent, var(--border-color), transparent);
+    margin: 0 0.5rem;
+    flex-shrink: 0;
+}
+
+.corner-controls {
+    display: grid;
+    grid-template-columns: 30px 30px;
+    grid-template-rows: 30px 30px;
+    gap: 4px;
+    background: rgba(0, 0, 0, 0.3);
+    padding: 0.5rem;
+    border-radius: 6px;
+    border: 1px solid var(--border-color);
+    flex-shrink: 0;
+}
+
+.corner-btn {
+    width: 30px;
+    height: 30px;
+    background: rgba(68, 68, 68, 0.5);
+    border: 1px solid var(--border-color);
+    border-radius: 4px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.3s ease;
+    color: var(--text-color);
+    font-size: 0.9rem;
+    position: relative;
+    user-select: none;
+}
+
+.corner-btn:hover:not(.disabled) {
+    border-color: var(--primary-color);
+    background: rgba(68, 68, 68, 0.7);
+}
+
+.corner-btn.active {
+    border-color: var(--success-color);
+    background: var(--success-color);
+    color: white;
+}
+
+.corner-btn.disabled {
+    opacity: 0.3;
+    cursor: not-allowed;
+    background: rgba(68, 68, 68, 0.2);
+}
+
+.corner-btn.occupied {
+    background: rgba(255, 193, 7, 0.3);
+    border-color: rgba(255, 193, 7, 0.7);
+}
+
+.corner-top-left { grid-column: 1; grid-row: 1; }
+.corner-top-right { grid-column: 2; grid-row: 1; }
+.corner-bottom-left { grid-column: 1; grid-row: 2; }
+.corner-bottom-right { grid-column: 2; grid-row: 2; }
+
+.corner-controls-container {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.25rem;
+    flex-shrink: 0;
+}
+
+.control-label {
+    font-size: 0.75rem;
+    color: #aaa;
+    text-align: center;
+    font-weight: 500;
+}
+
+.control-label.active {
+    color: var(--primary-color);
+    font-weight: 600;
+}
+
+/* Regras antigas mantidas para não quebrar a lógica do JS que as esconde */
+.position-container,
+.overlay-toggle,
+.position-grid,
+.position-grid-cell {
+    display: none !important;
+}
+
+/* === SEÇÃO DE FEEDBACK (PROGRESSO E LOGS) === */
+#progress-container { 
+    width: 100%; 
+    background-color: var(--hover-color); 
+    border-radius: 12px; 
+    display: none; 
+    overflow: hidden; 
+    border: 1px solid var(--border-color); 
+}
+
+#progress-bar { 
+    width: 0%; 
+    height: 24px; 
+    background: linear-gradient(90deg, var(--primary-color), var(--secondary-color)); 
+    border-radius: 12px; 
+    text-align: center; 
+    line-height: 24px; 
+    color: var(--bg-color); 
+    font-weight: bold; 
+    transition: width 0.3s ease; 
+}
+
+#logs-container { 
+    margin-top: 1rem; 
+    background: rgba(51, 51, 51, 0.6); 
+    border: 1px solid var(--border-color); 
+    padding: 1.5rem; 
+    border-radius: 12px; 
+    display: none; 
+}
+
+#logs-container h3 { 
+    color: var(--secondary-color); 
+    margin-bottom: 1rem; 
+    font-size: 1.1rem; 
+}
+
+#logs { 
+    white-space: pre-wrap; 
+    word-wrap: break-word; 
+    max-height: 200px; 
+    overflow-y: auto; 
+    background: var(--bg-color); 
+    padding: 1rem; 
+    border-radius: 8px; 
+    border: 1px solid var(--border-color); 
+    font-family: 'Courier New', monospace; 
+    font-size: 0.9rem; 
+    line-height: 1.4; 
+}
+
+#download-link { 
+    display: none !important; /* Regra original que foi substituída pelo .download-btn */
+}

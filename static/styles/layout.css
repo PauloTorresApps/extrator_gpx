@@ -1,0 +1,87 @@
+.main-header {
+    width: 100%;
+    background: rgba(30, 30, 30, 0.85);
+    backdrop-filter: blur(10px);
+    border-bottom: 1px solid rgba(187, 134, 252, 0.2);
+    padding: 0 2rem;
+    position: sticky;
+    top: 0;
+    z-index: 1002;
+    margin-bottom: 2rem;
+}
+
+.main-nav {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    max-width: 900px;
+    margin: 0 auto;
+    height: 60px;
+}
+
+.logo {
+    font-size: 1.2rem;
+    font-weight: bold;
+    color: var(--primary-color);
+    text-decoration: none;
+}
+
+.nav-controls {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+}
+
+#app {
+    background: rgba(30, 30, 30, 0.95);
+    backdrop-filter: blur(10px);
+    border: 1px solid rgba(187, 134, 252, 0.2);
+    padding: 2rem;
+    border-radius: 20px;
+    box-shadow: 0 20px 40px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(187, 134, 252, 0.1);
+    width: 100%;
+    max-width: 900px;
+    display: flex;
+    flex-direction: column;
+    gap: 2rem;
+    animation: fadeIn 0.8s ease-out;
+    position: relative;
+}
+
+.section { 
+    background: rgba(42, 42, 42, 0.6); 
+    border: 1px solid rgba(68, 68, 68, 0.5); 
+    border-radius: 16px; 
+    padding: 1.5rem; 
+    transition: all 0.3s ease; 
+    position: relative; 
+    overflow: hidden; 
+}
+
+.section:hover { 
+    background: rgba(42, 42, 42, 0.8); 
+    border-color: rgba(187, 134, 252, 0.3); 
+}
+
+.section-title { 
+    color: var(--secondary-color); 
+    font-size: 1.1rem; 
+    font-weight: 600; 
+    margin-bottom: 1rem; 
+    display: flex; 
+    align-items: center; 
+    gap: 0.75rem; 
+}
+
+.step-number { 
+    background: var(--primary-color); 
+    color: var(--bg-color); 
+    width: 24px; 
+    height: 24px; 
+    border-radius: 50%; 
+    display: flex; 
+    align-items: center; 
+    justify-content: center; 
+    font-size: 0.8rem; 
+    font-weight: bold; 
+}
