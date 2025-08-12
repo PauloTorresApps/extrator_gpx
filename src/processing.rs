@@ -53,8 +53,8 @@ fn t(key: &str, lang: &str) -> String {
             "video_start_time" => "Início do vídeo (UTC):".to_string(),
             "sync_point_selected" => "Ponto de sincronização GPX selecionado (UTC):".to_string(),
             "time_offset_calculated" => "Desvio de tempo calculado:".to_string(),
-            "reading_gpx" => "A ler ficheiro GPX:".to_string(),
-            "gpx_read_success" => "Ficheiro GPX lido com sucesso!".to_string(),
+            "reading_gpx" => "Lendo arquivo GPX:".to_string(),
+            "gpx_read_success" => "Arquivo GPX lido com sucesso!".to_string(),
             "interpolating_points" => "A interpolar pontos GPX...".to_string(),
             "original_points" => "Pontos originais no GPX:".to_string(),
             "points_after_interpolation" => "Pontos após interpolação:".to_string(),
@@ -420,7 +420,7 @@ fn generate_final_video(
 }
 
 fn cleanup_files(gpx_path: &Path, logs: &mut Vec<String>) {
-    logs.push("A limpar ficheiros temporários...".to_string());
+    logs.push("Limpando temporários...".to_string());
     if let Some(upload_dir) = gpx_path.parent() {
         if upload_dir.ends_with("uploads") {
             if let Err(e) = fs::remove_dir_all(upload_dir) {

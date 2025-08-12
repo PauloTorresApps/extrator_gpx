@@ -163,7 +163,7 @@ async fn process_files(mut multipart: Multipart) -> impl IntoResponse {
         }
     } else {
         let response = ProcessResponse {
-            message: "Erro: Ficheiros ou ponto de sincronização em falta.".to_string(),
+            message: "Erro: Arquivos ou ponto de sincronização em falta.".to_string(),
             download_url: None,
             logs: vec![],
         };

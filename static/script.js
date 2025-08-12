@@ -1,4 +1,4 @@
-// --- Seção de Tradução (com adição do overlay de Stats) ---
+// --- Seção de Tradução (com loading) ---
 const translations = {
     'en': {
         'main_title': '🎬 Interactive GPX + Video Sync',
@@ -22,18 +22,27 @@ const translations = {
         'notification_processing': 'Processing Video',
         'notification_success': 'Video Ready',
         'notification_error': 'Error',
-        'notification_suggestion': 'Auto Suggestion'
+        'notification_suggestion': 'Auto Suggestion',
+        // Loading
+        'loading_title': 'Processing Video',
+        'loading_message': 'Please wait while your video is being processed...',
+        'step_upload': 'Uploading files',
+        'step_analysis': 'Analyzing GPX data',
+        'step_sync': 'Synchronizing with video',
+        'step_overlays': 'Applying overlays',
+        'step_render': 'Rendering final video',
+        'loading_cancel': 'Cancel Processing'
     },
     'pt-BR': {
         'main_title': '🎬 Sincronização Interativa GPX + Vídeo',
-        'intro_text': 'Carregue os seus ficheiros, selecione um ponto de sincronização no mapa e configure os overlays para gerar o seu vídeo final com telemetria.',
-        'step1_title': 'Selecionar Ficheiros', 'gpx_file_label': 'Ficheiro GPX', 'choose_gpx': 'Escolher GPX', 'no_gpx_selected': 'Nenhum ficheiro selecionado', 'video_file_label': 'Ficheiro de Vídeo', 'choose_video': 'Escolher Vídeo', 'select_gpx_first': 'Selecione um ficheiro GPX primeiro',
-        'step2_title': 'Selecionar Ponto de Sincronização', 'map_click_prompt': '🎯 Clique num ponto no mapa para o definir como o início da sincronização.', 'step3_title': 'Posicionamento', 'speedo_label': '⚙️ Velocímetro', 'map_label': '🗺️ Mapa do Trajeto', 'stats_label': '📊 Estatísticas',
+        'intro_text': 'Carregue os seus arquivos, selecione um ponto de sincronização no mapa e configure os overlays para gerar o seu vídeo final com telemetria.',
+        'step1_title': 'Selecionar Arquivos', 'gpx_file_label': 'Arquivo GPX', 'choose_gpx': 'Escolher GPX', 'no_gpx_selected': 'Nenhum arquivo selecionado', 'video_file_label': 'Arquivo de Vídeo', 'choose_video': 'Escolher Vídeo', 'select_gpx_first': 'Selecione um arquivo GPX primeiro',
+        'step2_title': 'Selecionar Ponto de Sincronização', 'map_click_prompt': '🎯 Clique num ponto no mapa para o definir como o início da sincronização.', 'step3_title': 'Posicionamento', 'speedo_label': '⏱️ Velocímetro', 'map_label': '🗺️ Mapa do Trajeto', 'stats_label': '📊 Estatísticas',
         'generate_button': 'Confirmar e Gerar Vídeo', 'download_link': '📥 Descarregar Vídeo Final', 'logs_title': '📋 Logs do Processamento:',
-        'gpx_loaded': 'Ficheiro GPX carregado com sucesso', 'can_select_video': 'Agora pode selecionar o ficheiro de vídeo', 'analyzing_files': 'Analisando ficheiros para sugerir ponto e percurso...', 'high_precision_track_loaded': 'Percurso de alta precisão carregado do servidor.',
+        'gpx_loaded': 'Arquivo GPX carregado com sucesso', 'can_select_video': 'Agora pode selecionar o arquivo de vídeo', 'analyzing_files': 'Analisando arquivos para sugerir ponto e percurso...', 'high_precision_track_loaded': 'Percurso de alta precisão carregado do servidor.',
         'suggestion_applied': 'Sugestão automática aplicada! Pode ajustar no mapa se necessário.', 'suggestion_error': 'Não foi possível obter sugestão: {{message}}. Selecione um ponto manualmente.', 'suggestion_comm_error': 'Erro de comunicação ao obter sugestão. Selecione um ponto manualmente.',
-        'sync_point_selected': 'Ponto selecionado ({{type}}): {{time}} (UTC)', 'manual_type': 'manual', 'suggestion_type': 'sugestão', 'error_missing_files': 'Erro: Por favor, selecione os dois ficheiros e um ponto de sincronização.',
-        'uploading_files': 'A enviar ficheiros...', 'success_message': 'Sucesso! O seu vídeo está pronto.', 'server_error': 'Erro: {{message}}', 'network_error': 'Erro de rede ao enviar os ficheiros.',
+        'sync_point_selected': 'Ponto selecionado ({{type}}): {{time}} (UTC)', 'manual_type': 'manual', 'suggestion_type': 'sugestão', 'error_missing_files': 'Erro: Por favor, selecione os dois arquivos e um ponto de sincronização.',
+        'uploading_files': 'A enviar arquivos...', 'success_message': 'Sucesso! O seu vídeo está pronto.', 'server_error': 'Erro: {{message}}', 'network_error': 'Erro de rede ao enviar os arquivos.',
         'settings_title': 'Configurações Avançadas', 'interpolation_label': 'Nível de Precisão da Interpolação', 'interpolation_desc': 'Menor valor = mais pontos = maior precisão e processamento mais lento.',
         'speedo_hint': 'Exibe um velocímetro com a velocidade atual no vídeo.',
         'map_hint': 'Mostra um mini-mapa com o trajeto percorrido e a posição atual.',
@@ -46,7 +55,16 @@ const translations = {
         'notification_processing': 'Processando Vídeo', 
         'notification_success': 'Vídeo Pronto',
         'notification_error': 'Erro',
-        'notification_suggestion': 'Sugestão Automática'
+        'notification_suggestion': 'Sugestão Automática',
+        // Loading
+        'loading_title': 'Processando Vídeo',
+        'loading_message': 'Por favor, aguarde enquanto seu vídeo é processado...',
+        'step_upload': 'Enviando arquivos',
+        'step_analysis': 'Analisando dados GPX',
+        'step_sync': 'Sincronizando com vídeo',
+        'step_overlays': 'Aplicando overlays',
+        'step_render': 'Renderizando vídeo final',
+        'loading_cancel': 'Cancelar Processamento'
     }
 };
 
@@ -91,7 +109,6 @@ class NotificationManager {
         const duration = options.duration || 5000;
         const persistent = options.persistent || false;
 
-        // Ícones por tipo
         const icons = {
             success: '✅',
             error: '❌', 
@@ -112,18 +129,14 @@ class NotificationManager {
             ${!persistent ? '<div class="notification-progress"></div>' : ''}
         `;
 
-        // Event listener para fechar
         const closeBtn = notification.querySelector('.notification-close');
         closeBtn.addEventListener('click', () => this.hide(id));
 
-        // Adicionar ao container
         this.container.appendChild(notification);
         this.notifications.set(id, notification);
 
-        // Mostrar com animação
         setTimeout(() => notification.classList.add('show'), 50);
 
-        // Auto-hide se não for persistente
         if (!persistent && duration > 0) {
             setTimeout(() => this.hide(id), duration);
         }
@@ -165,8 +178,142 @@ class NotificationManager {
     }
 }
 
-// Instância global do gerenciador de notificações
+// === SISTEMA DE LOADING AVANÇADO ===
+class LoadingManager {
+    constructor() {
+        this.overlay = document.getElementById('loading-overlay');
+        this.progressBar = document.getElementById('loading-progress-bar');
+        this.percentage = document.getElementById('loading-percentage');
+        this.cancelBtn = document.getElementById('loading-cancel');
+        this.steps = [
+            'step-upload',
+            'step-analysis', 
+            'step-sync',
+            'step-overlays',
+            'step-render'
+        ];
+        this.currentStep = 0;
+        this.isVisible = false;
+        this.onCancel = null;
+        
+        this.cancelBtn.addEventListener('click', () => {
+            if (this.onCancel) {
+                this.onCancel();
+            }
+            this.hide();
+        });
+    }
+    
+    show(onCancelCallback = null) {
+        this.onCancel = onCancelCallback;
+        this.isVisible = true;
+        this.currentStep = 0;
+        this.resetSteps();
+        this.setProgress(0);
+        this.overlay.classList.add('show');
+    }
+    
+    hide() {
+        this.isVisible = false;
+        this.overlay.classList.remove('show');
+        this.resetSteps();
+        this.setProgress(0);
+    }
+    
+    setStep(stepIndex, status = 'active') {
+        if (stepIndex >= 0 && stepIndex < this.steps.length) {
+            const stepElement = document.getElementById(this.steps[stepIndex]);
+            const stepIcon = stepElement.querySelector('.step-icon');
+            
+            // Limpar classes anteriores
+            stepElement.className = `loading-step ${status}`;
+            
+            // Atualizar ícone baseado no status
+            if (status === 'completed') {
+                stepIcon.textContent = '✓';
+            } else if (status === 'error') {
+                stepIcon.textContent = '✗';
+            } else {
+                stepIcon.textContent = stepIndex + 1;
+            }
+            
+            this.currentStep = stepIndex;
+        }
+    }
+    
+    nextStep(status = 'completed') {
+        if (this.currentStep < this.steps.length) {
+            this.setStep(this.currentStep, status);
+            if (this.currentStep + 1 < this.steps.length) {
+                this.setStep(this.currentStep + 1, 'active');
+            }
+        }
+    }
+    
+    setProgress(percentage) {
+        const clampedPercentage = Math.max(0, Math.min(100, percentage));
+        this.progressBar.style.width = `${clampedPercentage}%`;
+        this.percentage.textContent = `${Math.round(clampedPercentage)}%`;
+    }
+    
+    resetSteps() {
+        this.steps.forEach((stepId, index) => {
+            const stepElement = document.getElementById(stepId);
+            const stepIcon = stepElement.querySelector('.step-icon');
+            stepElement.className = 'loading-step pending';
+            stepIcon.textContent = index + 1;
+        });
+    }
+    
+    simulateProgress() {
+        // Simulação realística do progresso baseada nas etapas
+        const progressSteps = [
+            { step: 0, progress: 15 },  // Upload
+            { step: 1, progress: 35 },  // Análise
+            { step: 2, progress: 55 },  // Sync
+            { step: 3, progress: 80 },  // Overlays
+            { step: 4, progress: 100 }  // Render
+        ];
+        
+        let currentProgressIndex = 0;
+        
+        const updateProgress = () => {
+            if (!this.isVisible || currentProgressIndex >= progressSteps.length) {
+                return;
+            }
+            
+            const currentTarget = progressSteps[currentProgressIndex];
+            this.setStep(currentTarget.step, 'active');
+            this.setProgress(currentTarget.progress);
+            
+            // Marcar etapa anterior como completa
+            if (currentProgressIndex > 0) {
+                this.setStep(progressSteps[currentProgressIndex - 1].step, 'completed');
+            }
+            
+            currentProgressIndex++;
+            
+            // Timing realístico para cada etapa
+            const delays = [3000, 4000, 3000, 5000, 6000]; // ms
+            if (currentProgressIndex < progressSteps.length) {
+                setTimeout(updateProgress, delays[currentProgressIndex - 1]);
+            } else {
+                // Completar última etapa
+                setTimeout(() => {
+                    if (this.isVisible) {
+                        this.setStep(4, 'completed');
+                    }
+                }, 1000);
+            }
+        };
+        
+        updateProgress();
+    }
+}
+
+// Instância global dos gerenciadores
 const notify = new NotificationManager();
+const loader = new LoadingManager();
 
 // Elementos da UI
 const gpxInput = document.getElementById('gpx-file');
@@ -218,7 +365,7 @@ closeModalBtn.addEventListener('click', () => settingsModal.classList.add('hidde
 settingsModal.addEventListener('click', (e) => { if (e.target === settingsModal) { settingsModal.classList.add('hidden'); } });
 interpolationSlider.addEventListener('input', () => { interpolationValue.textContent = `${interpolationSlider.value}s`; });
 
-// === NOVA FUNÇÃO: Validação de Estado do Botão Generate ===
+// === FUNÇÃO: Validação de Estado do Botão Generate ===
 function validateGenerateButton() {
     const hasFiles = gpxFile && videoFile;
     const hasSyncPoint = selectedSyncPoint !== null;
@@ -228,7 +375,6 @@ function validateGenerateButton() {
     
     generateBtn.disabled = !canGenerate;
     
-    // Atualizar visibilidade do botão baseado nos arquivos e sync point
     if (hasFiles && hasSyncPoint) {
         generateBtn.style.display = 'flex';
     } else {
@@ -369,7 +515,7 @@ function selectSyncPoint(point, isSuggestion) {
 }
 
 // ==============================================
-// SISTEMA INLINE DE OVERLAYS - VERSÃO FINAL CORRIGIDA
+// SISTEMA INLINE DE OVERLAYS - VERSÃO FINAL
 // ==============================================
 class InlineOverlayManager {
     constructor() {
@@ -613,7 +759,7 @@ class InlineOverlayManager {
 // Instanciar o gerenciador inline
 let inlineOverlayManager;
 
-// Nova função handleGenerate para usar sistema inline
+// === FUNÇÃO PRINCIPAL DE GERAÇÃO COM LOADING AVANÇADO ===
 function handleGenerateWithInlineOverlays() {
     if (!gpxFile || !videoFile || !selectedSyncPoint) { 
         notify.error(t('notification_error'), t('error_missing_files'));
@@ -626,11 +772,19 @@ function handleGenerateWithInlineOverlays() {
     }
     
     generateBtn.disabled = true;
-    notify.info(t('notification_processing'), t('uploading_files'));
     
-    progressContainer.style.display = 'block';
-    progressBar.style.width = '0%';
-    progressBar.textContent = '0%';
+    // Mostrar loading com simulação realística
+    loader.show(() => {
+        // Função de cancelamento (se o servidor suportar)
+        notify.warning('Cancelamento', 'Processamento cancelado pelo usuário');
+        generateBtn.disabled = false;
+        validateGenerateButton();
+    });
+    
+    // Iniciar simulação de progresso
+    loader.simulateProgress();
+    
+    // Ocultar elementos da UI desnecessários durante o processamento
     logsContainer.style.display = 'none';
     downloadDiv.style.display = 'none';
     
@@ -661,16 +815,17 @@ function handleGenerateWithInlineOverlays() {
     const xhr = new XMLHttpRequest();
     xhr.open('POST', '/process', true);
     
+    // Monitorar progresso de upload
     xhr.upload.onprogress = (event) => { 
         if (event.lengthComputable) { 
-            const percentComplete = Math.round((event.loaded / event.total) * 100); 
-            progressBar.style.width = percentComplete + '%'; 
-            progressBar.textContent = percentComplete + '%'; 
+            const uploadPercentage = Math.round((event.loaded / event.total) * 15); // Upload = 15% do total
+            loader.setProgress(uploadPercentage);
         } 
     };
     
     xhr.onload = () => {
-        progressContainer.style.display = 'none';
+        loader.hide();
+        
         const result = JSON.parse(xhr.responseText);
         logsPre.textContent = result.logs.join('\n');
         logsContainer.style.display = 'block';
@@ -690,9 +845,9 @@ function handleGenerateWithInlineOverlays() {
     };
     
     xhr.onerror = () => { 
+        loader.hide();
         notify.error(t('notification_error'), t('network_error'));
         generateBtn.disabled = false; 
-        progressContainer.style.display = 'none';
         validateGenerateButton();
     };
     
