@@ -30,15 +30,11 @@ fn t(key: &str, lang: &str) -> String {
             "reading_gpx" => "Reading track file:".to_string(),
             "gpx_read_success" => "Track file read successfully!".to_string(),
             "interpolating_points" => "Interpolating track points...".to_string(),
-            "original_points" => "Original points in track:".to_string(),
-            "points_after_interpolation" => "Points after interpolation:".to_string(),
-            "added_points" => "added:".to_string(),
             "interpolation_complete" => "Track point interpolation complete!".to_string(),
             "generating_track_image" => "Generating base track image...".to_string(),
             "generating_marker_image" => "Generating marker image...".to_string(),
             "map_assets_generated" => "Map assets generated.".to_string(),
             "processing_gpx_points" => "Processing track points to generate frames...".to_string(),
-            "segment_processed" => "Segment processed:".to_string(),
             "frame_generation_complete" => "Data frame generation complete:".to_string(),
             "generating_final_video" => "Generating final video...".to_string(),
             "final_video_success" => "Final video generated successfully!".to_string(),
@@ -59,15 +55,11 @@ fn t(key: &str, lang: &str) -> String {
             "reading_gpx" => "Lendo arquivo de trilha:".to_string(),
             "gpx_read_success" => "Arquivo de trilha lido com sucesso!".to_string(),
             "interpolating_points" => "A interpolar pontos da trilha...".to_string(),
-            "original_points" => "Pontos originais na trilha:".to_string(),
-            "points_after_interpolation" => "Pontos após interpolação:".to_string(),
-            "added_points" => "adicionados:".to_string(),
             "interpolation_complete" => "Interpolação de pontos da trilha concluída!".to_string(),
             "generating_track_image" => "A gerar imagem base do trajeto...".to_string(),
             "generating_marker_image" => "A gerar imagem do marcador...".to_string(),
             "map_assets_generated" => "Assets do mapa gerados.".to_string(),
             "processing_gpx_points" => "A processar pontos da trilha para gerar frames...".to_string(),
-            "segment_processed" => "Segmento processado:".to_string(),
             "frame_generation_complete" => "Geração de frames de dados concluída:".to_string(),
             "generating_final_video" => "A gerar o vídeo final...".to_string(),
             "final_video_success" => "Vídeo final gerado com sucesso!".to_string(),
@@ -82,7 +74,7 @@ fn t(key: &str, lang: &str) -> String {
 }
 
 pub fn run_processing(
-    gpx_path: PathBuf, 
+    track_file_path: PathBuf, 
     video_path: PathBuf, 
     sync_timestamp_str: String, 
     add_speedo_overlay: bool,
@@ -97,7 +89,7 @@ pub fn run_processing(
     let mut logs = Vec::new();
     
     match process_internal(
-        gpx_path.clone(), 
+        track_file_path.clone(), 
         video_path.clone(), 
         &mut logs, 
         sync_timestamp_str, 
@@ -112,20 +104,20 @@ pub fn run_processing(
     ) {
         Ok(_) => {
             logs.push(t("processing_complete", &lang));
-            cleanup_files(&gpx_path, &mut logs);
+            cleanup_files(&track_file_path, &mut logs);
             Ok(logs)
         },
         Err(e) => {
             let error_message = e.to_string();
             logs.push(format!("{} {}", t("error_occurred", &lang), error_message));
-            cleanup_files(&gpx_path, &mut logs);
+            cleanup_files(&track_file_path, &mut logs);
             Err((error_message, logs))
         }
     }
 }
 
 fn process_internal(
-    gpx_path: PathBuf, 
+    track_file_path: PathBuf, 
     video_path: PathBuf, 
     logs: &mut Vec<String>, 
     sync_timestamp_str: String, 
@@ -157,15 +149,14 @@ fn process_internal(
     let time_offset = selected_gpx_time - video_start_time;
     logs.push(format!("{} {} segundos.", t("time_offset_calculated", lang), time_offset.num_seconds()));
 
-    logs.push(format!("{} {:?}", t("reading_gpx", lang), gpx_path));
+    logs.push(format!("{} {:?}", t("reading_gpx", lang), track_file_path));
     
-    let is_tcx_file = gpx_path.extension().map_or(false, |ext| ext.to_str().unwrap_or("").eq_ignore_ascii_case("tcx"));
-    
-    let original_gpx: Gpx = crate::read_track_file(&gpx_path)?;
+    let track_file_data = crate::read_track_file(&track_file_path)?;
+    let is_tcx_file = track_file_data.extra_data.is_some();
     logs.push(t("gpx_read_success", lang));
     
     logs.push(t("interpolating_points", lang));
-    let gpx = interpolate_gpx_points(original_gpx, interpolation_level);
+    let gpx = interpolate_gpx_points(track_file_data.gpx, interpolation_level);
     
     let map_image_path = format!("{}/track_base.png", map_assets_dir);
     let dot_image_path = format!("{}/marker_dot.png", map_assets_dir);
@@ -204,11 +195,22 @@ fn process_internal(
                             if adjusted_point_time >= video_start_time && adjusted_point_time <= video_end_time {
                                 let mut speedo_output_path = String::new();
                                 let mut stats_output_path: Option<String> = None;
+                                
+                                // Extrai dados de telemetria uma vez para reutilização
+                                let (current_hr, current_cad, current_spd) = extract_telemetry_from_waypoint(p2);
 
                                 if add_speedo_overlay {
                                     let p1 = &segment_points[i - 1];
                                     let p3 = &segment_points[i + 1];
-                                    let speed_kmh = calculate_speed_kmh(p1, p2).unwrap_or(0.0);
+
+                                    // --- MELHORIA: Unifica a fonte de velocidade ---
+                                    let speed_kmh = if is_tcx_file && current_spd.is_some() {
+                                        current_spd.unwrap() // Usa a velocidade do sensor TCX se disponível
+                                    } else {
+                                        calculate_speed_kmh(p1, p2).unwrap_or(0.0) // Senão, calcula a partir do GPS
+                                    };
+                                    // --- FIM DA MELHORIA ---
+
                                     let g_force = calculate_g_force(p1, p2, p3).unwrap_or(0.0);
                                     let bearing = calculate_bearing(p1, p2);
                                     let elevation = p2.elevation.unwrap_or(0.0);
@@ -234,8 +236,6 @@ fn process_internal(
                                     
                                     let (mut heart_rate, mut cadence, mut speed_tcx) = (None, None, None);
                                     if is_tcx_file {
-                                        let (current_hr, current_cad, current_spd) = extract_tcx_data_from_waypoint(p2);
-                                        
                                         if current_hr.is_some() { last_known_hr = current_hr; }
                                         if current_cad.is_some() { last_known_cadence = current_cad; }
                                         if current_spd.is_some() { last_known_speed = current_spd; }
@@ -443,9 +443,9 @@ fn generate_final_video(
     Ok(())
 }
 
-fn cleanup_files(gpx_path: &Path, logs: &mut Vec<String>) {
+fn cleanup_files(track_file_path: &Path, logs: &mut Vec<String>) {
     logs.push("Limpando temporários...".to_string());
-    if let Some(upload_dir) = gpx_path.parent() {
+    if let Some(upload_dir) = track_file_path.parent() {
         if upload_dir.ends_with("uploads") {
             if let Err(e) = fs::remove_dir_all(upload_dir) {
                 logs.push(format!("Aviso: Não foi possível apagar a pasta de uploads: {}", e));
@@ -464,23 +464,26 @@ fn cleanup_files(gpx_path: &Path, logs: &mut Vec<String>) {
     logs.push("Limpeza concluída.".to_string());
 }
 
-fn extract_tcx_data_from_waypoint(point: &Waypoint) -> (Option<f64>, Option<f64>, Option<f64>) {
-    let mut heart_rate = None;
-    let mut cadence = None;
-    let mut speed = None;
+/// Extrai dados de telemetria de um Waypoint usando o campo `comment`.
+/// Esta função é pública para ser acessível pelo `main.rs`.
+pub fn extract_telemetry_from_waypoint(point: &Waypoint) -> (Option<f64>, Option<f64>, Option<f64>) {
+    let (mut heart_rate, mut cadence, mut speed) = (None, None, None);
 
     if let Some(comment) = &point.comment {
         for part in comment.split(';') {
-            if part.starts_with("HR:") {
-                heart_rate = part[3..].parse().ok();
-            } else if part.starts_with("Cadence:") {
-                cadence = part[8..].parse().ok();
-            } else if part.starts_with("Speed:") {
-                if let Ok(speed_ms) = part[6..].parse::<f64>() {
-                    speed = Some(speed_ms * 3.6);
+            let mut key_val = part.splitn(2, ':');
+            if let (Some(key), Some(val_str)) = (key_val.next(), key_val.next()) {
+                if let Ok(val) = val_str.parse::<f64>() {
+                    match key {
+                        "HR" => heart_rate = Some(val),
+                        "CAD" => cadence = Some(val),
+                        "SPD" => speed = Some(val * 3.6), // Converte m/s para km/h
+                        _ => {}
+                    }
                 }
             }
         }
     }
+
     (heart_rate, cadence, speed)
 }
