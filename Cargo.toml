@@ -9,6 +9,7 @@ edition = "2021"
 # Seção de dependências.
 [dependencies]
 gpx = "0.10.0"
+tcx = "0.9.3"  # NOVA: Suporte para formato TCX
 ffprobe = "0.4.0"
 chrono = { version = "0.4.38", features = ["serde"] }
 chrono-tz = "0.8"

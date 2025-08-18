@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>GPX Video Sync & Overlay</title>
+    <title>GPX/TCX Video Sync & Overlay</title>
     
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
@@ -18,7 +18,7 @@
 <body>
     <header class="main-header">
         <nav class="main-nav">
-            <a href="#" class="logo" data-i18n="main_title">🎬 GPX Video Sync</a>
+            <a href="#" class="logo" data-i18n="main_title">🎬 GPX/TCX Video Sync</a>
             <div class="nav-controls">
                 <div class="lang-switcher">
                     <button id="lang-pt" class="active">🇧🇷 PT-BR</button>
@@ -50,7 +50,7 @@
                 </div>
                 <div class="loading-step pending" id="step-analysis">
                     <div class="step-icon">2</div>
-                    <div class="step-text" data-i18n="step_analysis">Analisando dados GPX</div>
+                    <div class="step-text" data-i18n="step_analysis">Analisando dados de trilha</div>
                 </div>
                 <div class="loading-step pending" id="step-sync">
                     <div class="step-icon">3</div>
@@ -92,7 +92,7 @@
             </div>
         </div>
 
-        <p class="intro-text" data-i18n="intro_text">Carregue os seus ficheiros, selecione um ponto de sincronização no mapa e configure os overlays para gerar o seu vídeo final com telemetria.</p>
+        <p class="intro-text" data-i18n="intro_text">Carregue os seus ficheiros de trilha (GPX ou TCX), selecione um ponto de sincronização no mapa e configure os overlays para gerar o seu vídeo final com telemetria.</p>
         
         <div class="section">
             <div class="section-title">
@@ -101,11 +101,11 @@
             </div>
             <div class="files-container">
                 <div class="file-group">
-                    <label class="file-group-label" data-i18n="gpx_file_label">Ficheiro GPX</label>
+                    <label class="file-group-label" data-i18n="gpx_file_label">Ficheiro GPX/TCX</label>
                     <label class="file-upload-label">
                         <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"></path></svg>
-                        <span data-i18n="choose_gpx">Escolher GPX</span>
-                        <input type="file" id="gpx-file" accept=".gpx">
+                        <span data-i18n="choose_gpx">Escolher GPX/TCX</span>
+                        <input type="file" id="gpx-file" accept=".gpx,.tcx">
                     </label>
                     <span id="gpx-info" class="file-info" data-i18n="no_gpx_selected">Nenhum ficheiro selecionado</span>
                 </div>
@@ -116,7 +116,7 @@
                         <span data-i18n="choose_video">Escolher Vídeo</span>
                         <input type="file" id="video-file" accept="video/*" disabled>
                     </label>
-                    <span id="video-info" class="file-info" data-i18n="select_gpx_first">Selecione um ficheiro GPX primeiro</span>
+                    <span id="video-info" class="file-info" data-i18n="select_gpx_first">Selecione um ficheiro de trilha primeiro</span>
                 </div>
             </div>
             <div id="track-info" class="track-info"></div>

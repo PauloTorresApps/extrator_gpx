@@ -8,8 +8,12 @@ function handleGpxUpload(event) {
     gpxFile = event.target.files[0]; 
     if (!gpxFile) return; 
     
-    gpxInfo.textContent = gpxFile.name; 
-    notify.success(t('notification_gpx_loaded'), t('gpx_loaded'));
+    // NOVO: Detectar tipo de arquivo
+    const fileExt = gpxFile.name.split('.').pop().toLowerCase();
+    const fileTypeText = fileExt === 'tcx' ? 'TCX' : 'GPX';
+    
+    gpxInfo.textContent = `${fileTypeText}: ${gpxFile.name}`; 
+    notify.success(t('notification_gpx_loaded'), `${fileTypeText} - ${t('gpx_loaded')}`);
     
     videoInput.disabled = false; 
     videoInfo.textContent = t('can_select_video'); 
@@ -55,6 +59,11 @@ async function fetchAndApplySuggestion() {
             notify.success(t('notification_suggestion'), t('high_precision_track_loaded'));
             gpxDataPoints = data.interpolated_points.map(p => ({ ...p, time: new Date(p.time) }));
             displayTrack(gpxDataPoints);
+            
+            // NOVO: Mostrar informações extras do TCX se disponível
+            if (data.file_type === 'TCX' && data.extra_data) {
+                showTcxExtraInfo(data.extra_data, data.sport_type);
+            }
         }
         
         if (response.ok && data.timestamp) {
@@ -75,4 +84,48 @@ async function fetchAndApplySuggestion() {
         console.error("Error calling /suggest endpoint:", error);
         notify.error(t('notification_error'), t('suggestion_comm_error'));
     }
+}
+
+// NOVA: Função para exibir informações extras do TCX
+function showTcxExtraInfo(extraData, sportType) {
+    const trackInfoDiv = document.getElementById('track-info');
+    
+    let infoHtml = `<h4>📊 ${t('tcx_extra_data_loaded')}</h4>`;
+    
+    if (sportType) {
+        infoHtml += `<p><strong>${t('tcx_sport_detected', { sport: sportType })}</strong></p>`;
+    }
+    
+    const stats = [];
+    
+    if (extraData.total_calories > 0) {
+        stats.push(t('tcx_calories', { calories: Math.round(extraData.total_calories) }));
+    }
+    
+    if (extraData.average_heart_rate && extraData.max_heart_rate) {
+        stats.push(t('tcx_heart_rate', { 
+            avg: Math.round(extraData.average_heart_rate), 
+            max: Math.round(extraData.max_heart_rate) 
+        }));
+    }
+    
+    if (extraData.average_cadence && extraData.max_cadence) {
+        stats.push(t('tcx_cadence', { 
+            avg: Math.round(extraData.average_cadence), 
+            max: Math.round(extraData.max_cadence) 
+        }));
+    }
+    
+    if (stats.length > 0) {
+        infoHtml += '<ul>';
+        stats.forEach(stat => {
+            infoHtml += `<li>${stat}</li>`;
+        });
+        infoHtml += '</ul>';
+    }
+    
+    trackInfoDiv.innerHTML = infoHtml;
+    trackInfoDiv.style.display = 'block';
+    
+    notify.info(t('notification_suggestion'), t('tcx_extra_data_loaded'));
 }

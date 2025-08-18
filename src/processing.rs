@@ -1,11 +1,10 @@
-use std::fs::{self, File};
-use std::io::BufReader;
+use std::fs::{self};
 use std::path::{Path, PathBuf};
 use std::process::Command as StdCommand;
 use std::error::Error;
 
 use chrono::{DateTime, Utc};
-use gpx::{Gpx, Waypoint, read};
+use gpx::{Gpx, Waypoint};
 use image::Rgba;
 use crate::drawing::{generate_speedometer_image, generate_track_map_image, generate_dot_image, generate_stats_image};
 use crate::utils::{calculate_speed_kmh, get_video_time_range, calculate_g_force, calculate_bearing, interpolate_gpx_points};
@@ -24,25 +23,25 @@ fn t(key: &str, lang: &str) -> String {
             "error_occurred" => "An error occurred:".to_string(),
             "reading_video_metadata" => "Reading video metadata:".to_string(),
             "video_start_time" => "Video start (UTC):".to_string(),
-            "sync_point_selected" => "Selected GPX sync point (UTC):".to_string(),
+            "sync_point_selected" => "Selected track sync point (UTC):".to_string(), // MODIFICADO
             "time_offset_calculated" => "Calculated time offset:".to_string(),
-            "reading_gpx" => "Reading GPX file:".to_string(),
-            "gpx_read_success" => "GPX file read successfully!".to_string(),
-            "interpolating_points" => "Interpolating GPX points...".to_string(),
-            "original_points" => "Original points in GPX:".to_string(),
+            "reading_gpx" => "Reading track file:".to_string(), // MODIFICADO
+            "gpx_read_success" => "Track file read successfully!".to_string(), // MODIFICADO
+            "interpolating_points" => "Interpolating track points...".to_string(), // MODIFICADO
+            "original_points" => "Original points in track:".to_string(), // MODIFICADO
             "points_after_interpolation" => "Points after interpolation:".to_string(),
             "added_points" => "added:".to_string(),
-            "interpolation_complete" => "GPX point interpolation complete!".to_string(),
+            "interpolation_complete" => "Track point interpolation complete!".to_string(), // MODIFICADO
             "generating_track_image" => "Generating base track image...".to_string(),
             "generating_marker_image" => "Generating marker image...".to_string(),
             "map_assets_generated" => "Map assets generated.".to_string(),
-            "processing_gpx_points" => "Processing GPX points to generate frames...".to_string(),
+            "processing_gpx_points" => "Processing track points to generate frames...".to_string(), // MODIFICADO
             "segment_processed" => "Segment processed:".to_string(),
             "frame_generation_complete" => "Data frame generation complete:".to_string(),
             "generating_final_video" => "Generating final video...".to_string(),
             "final_video_success" => "Final video generated successfully!".to_string(),
             "no_overlay_selected" => "No overlay was selected. Generating copy of the original video.".to_string(),
-            "no_gpx_match" => "No GPX points matched the video time. Generating copy of the original video.".to_string(),
+            "no_gpx_match" => "No track points matched the video time. Generating copy of the original video.".to_string(), // MODIFICADO
             "ffmpeg_failed" => "FFmpeg command failed. Filter:".to_string(),
             _ => key.to_string(),
         },
@@ -51,25 +50,25 @@ fn t(key: &str, lang: &str) -> String {
             "error_occurred" => "Ocorreu um erro:".to_string(),
             "reading_video_metadata" => "A ler metadados do vídeo:".to_string(),
             "video_start_time" => "Início do vídeo (UTC):".to_string(),
-            "sync_point_selected" => "Ponto de sincronização GPX selecionado (UTC):".to_string(),
+            "sync_point_selected" => "Ponto de sincronização da trilha selecionado (UTC):".to_string(), // MODIFICADO
             "time_offset_calculated" => "Desvio de tempo calculado:".to_string(),
-            "reading_gpx" => "Lendo arquivo GPX:".to_string(),
-            "gpx_read_success" => "Arquivo GPX lido com sucesso!".to_string(),
-            "interpolating_points" => "A interpolar pontos GPX...".to_string(),
-            "original_points" => "Pontos originais no GPX:".to_string(),
+            "reading_gpx" => "Lendo arquivo de trilha:".to_string(), // MODIFICADO
+            "gpx_read_success" => "Arquivo de trilha lido com sucesso!".to_string(), // MODIFICADO
+            "interpolating_points" => "A interpolar pontos da trilha...".to_string(), // MODIFICADO
+            "original_points" => "Pontos originais na trilha:".to_string(), // MODIFICADO
             "points_after_interpolation" => "Pontos após interpolação:".to_string(),
             "added_points" => "adicionados:".to_string(),
-            "interpolation_complete" => "Interpolação de pontos GPX concluída!".to_string(),
+            "interpolation_complete" => "Interpolação de pontos da trilha concluída!".to_string(), // MODIFICADO
             "generating_track_image" => "A gerar imagem base do trajeto...".to_string(),
             "generating_marker_image" => "A gerar imagem do marcador...".to_string(),
             "map_assets_generated" => "Assets do mapa gerados.".to_string(),
-            "processing_gpx_points" => "A processar pontos GPX para gerar frames...".to_string(),
+            "processing_gpx_points" => "A processar pontos da trilha para gerar frames...".to_string(), // MODIFICADO
             "segment_processed" => "Segmento processado:".to_string(),
             "frame_generation_complete" => "Geração de frames de dados concluída:".to_string(),
             "generating_final_video" => "A gerar o vídeo final...".to_string(),
             "final_video_success" => "Vídeo final gerado com sucesso!".to_string(),
             "no_overlay_selected" => "Nenhum overlay foi selecionado. A gerar cópia do vídeo original.".to_string(),
-            "no_gpx_match" => "Nenhum ponto GPX coincidiu com o tempo do vídeo. A gerar cópia do vídeo original.".to_string(),
+            "no_gpx_match" => "Nenhum ponto da trilha coincidiu com o tempo do vídeo. A gerar cópia do vídeo original.".to_string(), // MODIFICADO
             "ffmpeg_failed" => "O comando FFmpeg falhou. Filtro:".to_string(),
             _ => key.to_string(),
         },
@@ -153,7 +152,7 @@ fn process_internal(
     logs.push(format!("{} {} segundos.", t("time_offset_calculated", lang), time_offset.num_seconds()));
 
     logs.push(format!("{} {:?}", t("reading_gpx", lang), gpx_path));
-    let original_gpx: Gpx = read(BufReader::new(File::open(&gpx_path)?))?;
+    let original_gpx: Gpx = crate::read_track_file(&gpx_path)?;
     logs.push(t("gpx_read_success", lang));
     
     logs.push(t("interpolating_points", lang));

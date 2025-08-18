@@ -3,6 +3,7 @@
 mod drawing;
 mod processing;
 mod utils;
+mod tcx_adapter; // NOVO: Módulo para suporte TCX
 
 use axum::{
     extract::{DefaultBodyLimit, Multipart},
@@ -54,6 +55,10 @@ struct PointJson {
     lat: f64,
     lon: f64,
     time: Option<String>,
+    // NOVOS: Campos extras do TCX
+    heart_rate: Option<f64>,
+    cadence: Option<f64>,
+    speed: Option<f64>,
 }
 
 #[derive(Serialize)]
@@ -64,6 +69,23 @@ struct SuggestionResponse {
     timestamp: Option<String>,
     display_timestamp: Option<String>,
     interpolated_points: Option<Vec<PointJson>>,
+    // NOVOS: Dados extras do TCX
+    file_type: Option<String>,
+    sport_type: Option<String>,
+    extra_data: Option<TcxExtraDataJson>,
+}
+
+#[derive(Serialize)]
+struct TcxExtraDataJson {
+    total_time_seconds: f64,
+    total_distance_meters: f64,
+    total_calories: f64,
+    max_speed: f64,
+    average_heart_rate: Option<f64>,
+    max_heart_rate: Option<f64>,
+    average_cadence: Option<f64>,
+    max_cadence: Option<f64>,
+    average_speed: Option<f64>,
 }
 
 #[derive(Debug, Default)]
@@ -79,6 +101,40 @@ struct ProcessParams {
     stats_position: Option<String>,
     lang: String,
     interpolation_level: i64,
+}
+
+/// Função auxiliar para detectar o tipo de arquivo baseado na extensão
+fn detect_file_type(path: &PathBuf) -> String {
+    if let Some(ext) = path.extension() {
+        match ext.to_str().unwrap_or("").to_lowercase().as_str() {
+            "tcx" => "TCX".to_string(),
+            "gpx" => "GPX".to_string(),
+            _ => "Unknown".to_string(),
+        }
+    } else {
+        "Unknown".to_string()
+    }
+}
+
+/// Função para ler arquivo de trilha (GPX ou TCX) e converter para GPX
+fn read_track_file(path: &PathBuf) -> Result<gpx::Gpx, Box<dyn std::error::Error>> {
+    let file_type = detect_file_type(path);
+    
+    match file_type.as_str() {
+        "TCX" => {
+            // Lê TCX e converte para GPX
+            tcx_adapter::read_tcx_as_gpx(path)
+        },
+        "GPX" => {
+            // Lê GPX normalmente
+            use std::io::BufReader;
+            use std::fs::File;
+            Ok(gpx::read(BufReader::new(File::open(path)?))?)
+        },
+        _ => {
+            Err(format!("Formato de arquivo não suportado: {}", file_type).into())
+        }
+    }
 }
 
 async fn process_files(mut multipart: Multipart) -> impl IntoResponse {
@@ -101,6 +157,7 @@ async fn process_files(mut multipart: Multipart) -> impl IntoResponse {
             tokio::fs::write(&path, &data).await.unwrap();
             let absolute_path = std::fs::canonicalize(&path).unwrap();
 
+            // MODIFICADO: Aceita tanto GPX quanto TCX
             if name == "gpxFile" {
                 params.gpx_path = Some(absolute_path);
             } else if name == "videoFile" {
@@ -189,6 +246,7 @@ async fn suggest_sync_point(mut multipart: Multipart) -> impl IntoResponse {
             let path = upload_dir.join(format!("{}-{}", unique_id, file_name_str));
             tokio::fs::write(&path, &data).await.unwrap();
             
+            // MODIFICADO: Aceita tanto GPX quanto TCX
             if name == "gpxFile" { gpx_path = Some(path); }
             else if name == "videoFile" { video_path = Some(path); }
         } else {
@@ -203,15 +261,75 @@ async fn suggest_sync_point(mut multipart: Multipart) -> impl IntoResponse {
     let response = if let (Some(gpx_p), Some(video_p)) = (gpx_path, video_path) {
         match utils::get_video_time_range(&video_p, "en") {
             Ok((video_start_time, _)) => {
-                match gpx::read(std::io::BufReader::new(std::fs::File::open(&gpx_p).unwrap())) {
+                // MODIFICADO: Usa a nova função para ler tanto GPX quanto TCX
+                match read_track_file(&gpx_p) {
                     Ok(gpx_data) => {
+                        let file_type = detect_file_type(&gpx_p);
                         let interpolated_gpx = utils::interpolate_gpx_points(gpx_data, interpolation_level);
                         
                         let first_point_after = interpolated_gpx
                             .tracks.iter().flat_map(|t| t.segments.iter()).flat_map(|s| s.points.iter())
                             .find(|p| p.time.and_then(|t| t.format().ok()).and_then(|ts| ts.parse::<DateTime<chrono::Utc>>().ok()).map_or(false, |pt| pt > video_start_time));
 
-                        let points_for_json: Vec<PointJson> = interpolated_gpx.tracks.iter().flat_map(|t| t.segments.iter()).flat_map(|s| s.points.iter()).map(|p| PointJson { lat: p.point().y(), lon: p.point().x(), time: p.time.and_then(|t| t.format().ok()) }).collect();
+                        // MODIFICADO: Extrai dados extras se for TCX
+                        let (extra_data, sport_type) = if file_type == "TCX" {
+                            match tcx_adapter::extract_tcx_extra_data(&gpx_p) {
+                                Ok(tcx_extra) => {
+                                    let extra_json = TcxExtraDataJson {
+                                        total_time_seconds: tcx_extra.total_time_seconds,
+                                        total_distance_meters: tcx_extra.total_distance_meters,
+                                        total_calories: tcx_extra.total_calories,
+                                        max_speed: tcx_extra.max_speed,
+                                        average_heart_rate: tcx_extra.average_heart_rate(),
+                                        max_heart_rate: tcx_extra.max_heart_rate(),
+                                        average_cadence: tcx_extra.average_cadence(),
+                                        max_cadence: tcx_extra.max_cadence(),
+                                        average_speed: tcx_extra.average_speed(),
+                                    };
+                                    (Some(extra_json), tcx_extra.sport)
+                                },
+                                Err(_) => (None, None)
+                            }
+                        } else {
+                            (None, None)
+                        };
+
+                        // MODIFICADO: Extrai dados extras dos pontos se disponível
+                        let points_for_json: Vec<PointJson> = interpolated_gpx.tracks.iter()
+                            .flat_map(|t| t.segments.iter())
+                            .flat_map(|s| s.points.iter())
+                            .map(|p| {
+                                // Tenta extrair dados extras do comentário (onde armazenamos dados TCX)
+                                let (heart_rate, cadence, speed) = if let Some(comment) = &p.comment {
+                                    let mut hr = None;
+                                    let mut cad = None;
+                                    let mut spd = None;
+                                    
+                                    for part in comment.split(';') {
+                                        if part.starts_with("HR:") {
+                                            hr = part[3..].parse().ok();
+                                        } else if part.starts_with("Cadence:") {
+                                            cad = part[8..].parse().ok();
+                                        } else if part.starts_with("Speed:") {
+                                            spd = part[6..].parse().ok();
+                                        }
+                                    }
+                                    
+                                    (hr, cad, spd)
+                                } else {
+                                    (None, None, None)
+                                };
+
+                                PointJson {
+                                    lat: p.point().y(),
+                                    lon: p.point().x(),
+                                    time: p.time.and_then(|t| t.format().ok()),
+                                    heart_rate,
+                                    cadence,
+                                    speed,
+                                }
+                            })
+                            .collect();
 
                         if let Some(point) = first_point_after {
                             let point_coords = point.point();
@@ -232,25 +350,34 @@ async fn suggest_sync_point(mut multipart: Multipart) -> impl IntoResponse {
                                 timestamp: Some(timestamp_iso_str),
                                 display_timestamp: Some(display_timestamp_str),
                                 interpolated_points: Some(points_for_json),
+                                file_type: Some(file_type),
+                                sport_type,
+                                extra_data,
                             })
                         } else {
                             Json(SuggestionResponse { 
-                                message: "No GPX point found after video start.".to_string(), 
+                                message: "No track point found after video start.".to_string(), 
                                 latitude: None, 
                                 longitude: None, 
                                 timestamp: None, 
-                                display_timestamp: None, // CORRIGIDO
-                                interpolated_points: Some(points_for_json) 
+                                display_timestamp: None,
+                                interpolated_points: Some(points_for_json),
+                                file_type: Some(file_type),
+                                sport_type,
+                                extra_data,
                             })
                         }
                     },
-                    Err(_) => Json(SuggestionResponse { 
-                        message: "Error reading GPX file.".to_string(), 
+                    Err(e) => Json(SuggestionResponse { 
+                        message: format!("Error reading track file: {}", e), 
                         latitude: None, 
                         longitude: None, 
                         timestamp: None, 
-                        display_timestamp: None, // CORRIGIDO
-                        interpolated_points: None 
+                        display_timestamp: None,
+                        interpolated_points: None,
+                        file_type: None,
+                        sport_type: None,
+                        extra_data: None,
                     }),
                 }
             },
@@ -259,18 +386,24 @@ async fn suggest_sync_point(mut multipart: Multipart) -> impl IntoResponse {
                 latitude: None, 
                 longitude: None, 
                 timestamp: None, 
-                display_timestamp: None, // CORRIGIDO
-                interpolated_points: None 
+                display_timestamp: None,
+                interpolated_points: None,
+                file_type: None,
+                sport_type: None,
+                extra_data: None,
             }),
         }
     } else {
         Json(SuggestionResponse { 
-            message: "Missing video or GPX file.".to_string(), 
+            message: "Missing video or track file.".to_string(), 
             latitude: None, 
             longitude: None, 
             timestamp: None, 
-            display_timestamp: None, // CORRIGIDO
-            interpolated_points: None 
+            display_timestamp: None,
+            interpolated_points: None,
+            file_type: None,
+            sport_type: None,
+            extra_data: None,
         })
     };
     
