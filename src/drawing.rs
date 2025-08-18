@@ -112,7 +112,7 @@ pub fn generate_speedometer_image(speed_kmh: f64, bearing: f64, g_force: f64, el
     Ok(())
 }
 
-// FUNÇÃO MODIFICADA: `generate_stats_image` agora converte o fuso horário e exibe a data
+// FUNÇÃO MODIFICADA: `generate_stats_image` agora inclui dados TCX
 pub fn generate_stats_image(
     distance_km: f64,
     altitude_m: f64,
@@ -120,9 +120,15 @@ pub fn generate_stats_image(
     current_time_utc: DateTime<Utc>,
     output_path: &str,
     lang: &str,
+    // NOVOS: Parâmetros para dados TCX
+    heart_rate: Option<f64>,
+    cadence: Option<f64>,
+    speed_kmh: Option<f64>,
+    calories: Option<f64>,
 ) -> Result<(), Box<dyn Error>> {
-    const WIDTH: u32 = 220;
-    const HEIGHT: u32 = 250;
+    // AUMENTADO: Largura e altura para acomodar mais dados
+    const WIDTH: u32 = 280;
+    const HEIGHT: u32 = 400; // Aumentado de 250 para 400
     let mut img = RgbaImage::new(WIDTH, HEIGHT);
 
     // Fundo transparente
@@ -131,42 +137,94 @@ pub fn generate_stats_image(
     }
 
     let white = Rgba([255, 255, 255, 255]);
+    let tcx_color = Rgba([3, 218, 198, 255]); // Cor especial para dados TCX
     let font_data_bold = include_bytes!("../DejaVuSans-Bold.ttf");
     let font_bold = Font::try_from_bytes(&font_data_bold[..]).ok_or("Falha ao carregar a fonte em negrito")?;
 
-    let scale_label = Scale::uniform(16.0); 
-    let scale_value = Scale::uniform(28.0);
-    let scale_sub_value = Scale::uniform(18.0); // Nova escala para a data
-    let y_start = 15;
-    let line_height = 60;
+    let scale_label = Scale::uniform(14.0); // Reduzido para caber mais dados
+    let scale_value = Scale::uniform(24.0); // Reduzido de 28 para 24
+    let scale_sub_value = Scale::uniform(16.0);
+    let y_start = 10;
+    let line_height = 50; // Reduzido de 60 para 50
+
+    let mut current_y = y_start;
 
     // Distância
     let distance_label = if lang == "en" { "DISTANCE" } else { "DISTÂNCIA" };
     let distance_value_unit = format!("{:.1} KM", distance_km);
-    draw_text_mut(&mut img, white, 10, y_start, scale_label, &font_bold, distance_label);
-    draw_text_mut(&mut img, white, 10, y_start + 20, scale_value, &font_bold, &distance_value_unit);
+    draw_text_mut(&mut img, white, 10, current_y, scale_label, &font_bold, distance_label);
+    draw_text_mut(&mut img, white, 10, current_y + 18, scale_value, &font_bold, &distance_value_unit);
+    current_y += line_height;
 
     // Altitude
     let altitude_label = if lang == "en" { "ALTITUDE" } else { "ALTITUDE" };
     let altitude_value_unit = format!("{:.0} M", altitude_m);
-    draw_text_mut(&mut img, white, 10, y_start + line_height, scale_label, &font_bold, altitude_label);
-    draw_text_mut(&mut img, white, 10, y_start + line_height + 20, scale_value, &font_bold, &altitude_value_unit);
+    draw_text_mut(&mut img, white, 10, current_y, scale_label, &font_bold, altitude_label);
+    draw_text_mut(&mut img, white, 10, current_y + 18, scale_value, &font_bold, &altitude_value_unit);
+    current_y += line_height;
 
     // Ganho de elevação
     let elevation_gain_label = if lang == "en" { "ELEVATION GAIN" } else { "GANHO DE ELEVAÇÃO" };
     let elevation_gain_value_unit = format!("{:.0} M", elevation_gain_m);
-    draw_text_mut(&mut img, white, 10, y_start + line_height * 2, scale_label, &font_bold, elevation_gain_label);
-    draw_text_mut(&mut img, white, 10, y_start + line_height * 2 + 20, scale_value, &font_bold, &elevation_gain_value_unit);
+    draw_text_mut(&mut img, white, 10, current_y, scale_label, &font_bold, elevation_gain_label);
+    draw_text_mut(&mut img, white, 10, current_y + 18, scale_value, &font_bold, &elevation_gain_value_unit);
+    current_y += line_height;
 
-    // Horário e Data
+    // NOVO: Frequência Cardíaca (se disponível)
+    if let Some(hr) = heart_rate {
+        let hr_label = if lang == "en" { "❤️ HEART RATE" } else { "❤️ FREQ. CARDÍACA" };
+        let hr_value_unit = format!("{:.0} BPM", hr);
+        
+        // Cor baseada na zona de FC (estimativa)
+        let hr_color = if hr > 160.0 { 
+            Rgba([255, 69, 0, 255])   // Vermelho para FC alta
+        } else if hr > 140.0 { 
+            Rgba([255, 165, 0, 255])  // Laranja para FC moderada
+        } else { 
+            tcx_color                 // Ciano para FC baixa
+        };
+        
+        draw_text_mut(&mut img, hr_color, 10, current_y, scale_label, &font_bold, hr_label);
+        draw_text_mut(&mut img, hr_color, 10, current_y + 18, scale_value, &font_bold, &hr_value_unit);
+        current_y += line_height;
+    }
+
+    // NOVO: Cadência (se disponível)
+    if let Some(cad) = cadence {
+        let cadence_label = if lang == "en" { "🦵 CADENCE" } else { "🦵 CADÊNCIA" };
+        let cadence_value_unit = format!("{:.0} SPM", cad);
+        draw_text_mut(&mut img, tcx_color, 10, current_y, scale_label, &font_bold, cadence_label);
+        draw_text_mut(&mut img, tcx_color, 10, current_y + 18, scale_value, &font_bold, &cadence_value_unit);
+        current_y += line_height;
+    }
+
+    // NOVO: Velocidade (se disponível e diferente do velocímetro)
+    if let Some(spd) = speed_kmh {
+        let speed_label = if lang == "en" { "⚡ SPEED" } else { "⚡ VELOCIDADE" };
+        let speed_value_unit = format!("{:.1} KM/H", spd);
+        draw_text_mut(&mut img, tcx_color, 10, current_y, scale_label, &font_bold, speed_label);
+        draw_text_mut(&mut img, tcx_color, 10, current_y + 18, scale_value, &font_bold, &speed_value_unit);
+        current_y += line_height;
+    }
+
+    // NOVO: Calorias (se disponível)
+    if let Some(cal) = calories {
+        let calories_label = if lang == "en" { "🔥 CALORIES" } else { "🔥 CALORIAS" };
+        let calories_value_unit = format!("{:.0}", cal);
+        draw_text_mut(&mut img, tcx_color, 10, current_y, scale_label, &font_bold, calories_label);
+        draw_text_mut(&mut img, tcx_color, 10, current_y + 18, scale_value, &font_bold, &calories_value_unit);
+        current_y += line_height;
+    }
+
+    // Horário e Data (sempre no final)
     let brt_offset = FixedOffset::west_opt(3 * 3600).unwrap(); // Fuso horário UTC-3 (Horário de Brasília)
     let local_time = current_time_utc.with_timezone(&brt_offset);
 
     let time_text = local_time.format("%H:%M").to_string();
     let date_text = local_time.format("%d/%m/%Y").to_string();
 
-    draw_text_mut(&mut img, white, 10, y_start + line_height * 3, scale_value, &font_bold, &time_text);
-    draw_text_mut(&mut img, white, 10, y_start + line_height * 3 + 25, scale_sub_value, &font_bold, &date_text);
+    draw_text_mut(&mut img, white, 10, current_y, scale_value, &font_bold, &time_text);
+    draw_text_mut(&mut img, white, 10, current_y + 22, scale_sub_value, &font_bold, &date_text);
 
     img.save(output_path)?;
     Ok(())

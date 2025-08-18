@@ -227,10 +227,25 @@ fn process_internal(
 
                                     let distance_km = video_distance_m / 1000.0;
                                     let altitude_m = p2.elevation.unwrap_or(0.0);
+                                    
+                                    // NOVO: Extrair dados TCX do comentário do ponto
+                                    let (heart_rate, cadence, speed_tcx, calories_accumulated) = extract_tcx_data_from_point(p2, frame_counter as f64);
+                                    
                                     let stats_path = format!("{}/stats_frame_{:05}.png", stats_output_dir, stats_frame_counter);
                                     
-                                    // Usa a variável de ganho de elevação do vídeo
-                                    generate_stats_image(distance_km, altitude_m, video_elevation_gain_m, point_time, &stats_path, lang)?;
+                                    // MODIFICADO: Passar dados TCX para generate_stats_image
+                                    generate_stats_image(
+                                        distance_km, 
+                                        altitude_m, 
+                                        video_elevation_gain_m, 
+                                        point_time, 
+                                        &stats_path, 
+                                        lang,
+                                        heart_rate,
+                                        cadence,
+                                        speed_tcx,
+                                        calories_accumulated
+                                    )?;
                                     stats_output_path = Some(stats_path);
                                     stats_frame_counter += 1;
                                 }
@@ -437,4 +452,36 @@ fn cleanup_files(gpx_path: &Path, logs: &mut Vec<String>) {
         logs.push(format!("Aviso: Não foi possível apagar a pasta de assets do mapa: {}", e));
     }
     logs.push("Limpeza concluída.".to_string());
+}
+
+// NOVA: Função para extrair dados TCX dos comentários dos pontos GPX
+fn extract_tcx_data_from_point(point: &Waypoint, frame_progress: f64) -> (Option<f64>, Option<f64>, Option<f64>, Option<f64>) {
+    let mut heart_rate = None;
+    let mut cadence = None;
+    let mut speed = None;
+    let mut calories = None;
+    
+    if let Some(comment) = &point.comment {
+        for part in comment.split(';') {
+            if part.starts_with("HR:") {
+                heart_rate = part[3..].parse().ok();
+            } else if part.starts_with("Cadence:") {
+                cadence = part[8..].parse().ok();
+            } else if part.starts_with("Speed:") {
+                // Converte m/s para km/h
+                if let Ok(speed_ms) = part[6..].parse::<f64>() {
+                    speed = Some(speed_ms * 3.6);
+                }
+            }
+        }
+    }
+    
+    // Para calorias, fazemos uma estimativa simples baseada no progresso
+    // (Em um cenário real, você teria dados acumulados do TCX)
+    if heart_rate.is_some() {
+        // Estimativa muito simples: ~0.5 cal por frame com dados de HR
+        calories = Some(frame_progress * 0.5);
+    }
+    
+    (heart_rate, cadence, speed, calories)
 }

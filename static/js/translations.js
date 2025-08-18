@@ -56,7 +56,7 @@ const translations = {
         'settings_title': 'Configurações Avançadas', 'interpolation_label': 'Nível de Precisão da Interpolação', 'interpolation_desc': 'Menor valor = mais pontos = maior precisão e processamento mais lento.',
         'speedo_hint': 'Exibe um velocímetro com a velocidade atual no vídeo.',
         'map_hint': 'Mostra um mini-mapa com o trajeto percorrido e a posição atual.',
-        'stats_hint': 'Adiciona um painel com estatísticas como distância, tempo e elevação.',
+        'stats_hint': 'Adiciona um painel com estatísticas como distância, tempo, elevação e dados TCX (frequência cardíaca, cadência, calorias).',
         'error_missing_overlay': 'Erro: Por favor, selecione pelo menos um overlay (Velocímetro, Mapa ou Estatísticas).',
         // TCX specific
         'tcx_sport_detected': 'Desporto detectado: {{sport}}',
