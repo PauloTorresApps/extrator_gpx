@@ -1,3 +1,5 @@
+// src/processing.rs
+
 use std::fs::{self};
 use std::path::{Path, PathBuf};
 use std::process::Command as StdCommand;
@@ -156,12 +158,11 @@ fn process_internal(
     logs.push(format!("{} {} segundos.", t("time_offset_calculated", lang), time_offset.num_seconds()));
 
     logs.push(format!("{} {:?}", t("reading_gpx", lang), gpx_path));
+    
+    let is_tcx_file = gpx_path.extension().map_or(false, |ext| ext.to_str().unwrap_or("").eq_ignore_ascii_case("tcx"));
+    
     let original_gpx: Gpx = crate::read_track_file(&gpx_path)?;
     logs.push(t("gpx_read_success", lang));
-    
-    // NOVO: Detectar e extrair dados globais TCX uma única vez
-    logs.push(t("detecting_tcx_data", lang));
-    let tcx_global_data = extract_tcx_global_data(&gpx_path, logs, lang);
     
     logs.push(t("interpolating_points", lang));
     let gpx = interpolate_gpx_points(original_gpx, interpolation_level);
@@ -181,10 +182,13 @@ fn process_internal(
         let mut frame_counter = 0;
         let mut stats_frame_counter = 0;
         
-        // Variáveis para acumular distância e ganho de elevação APENAS para o vídeo.
         let mut video_distance_m: f64 = 0.0;
         let mut video_elevation_gain_m: f64 = 0.0;
         let mut last_video_point: Option<&Waypoint> = None;
+
+        let mut last_known_hr: Option<f64> = None;
+        let mut last_known_cadence: Option<f64> = None;
+        let mut last_known_speed: Option<f64> = None;
 
         for track in gpx.tracks.iter() {
             for segment in track.segments.iter() {
@@ -197,10 +201,9 @@ fn process_internal(
                         if let Ok(point_time) = time_str.parse::<DateTime<Utc>>() {
                             let adjusted_point_time = point_time - time_offset;
 
-                            // Verifica se o ponto está dentro do intervalo do vídeo
                             if adjusted_point_time >= video_start_time && adjusted_point_time <= video_end_time {
                                 let mut speedo_output_path = String::new();
-                                let mut stats_output_path = None;
+                                let mut stats_output_path: Option<String> = None;
 
                                 if add_speedo_overlay {
                                     let p1 = &segment_points[i - 1];
@@ -215,7 +218,6 @@ fn process_internal(
                                 }
 
                                 if add_stats_overlay {
-                                    // Cálculo incremental de distância e elevação
                                     if let Some(last_p) = last_video_point {
                                         video_distance_m += crate::utils::distance_2d(last_p, p2);
                                         
@@ -230,9 +232,18 @@ fn process_internal(
                                     let distance_km = video_distance_m / 1000.0;
                                     let altitude_m = p2.elevation.unwrap_or(0.0);
                                     
-                                    // CORRIGIDO: Usar dados TCX globais consistentes
-                                    let (heart_rate, cadence, speed_tcx, calories) = 
-                                        extract_tcx_data_for_frame(p2, &tcx_global_data, stats_frame_counter as f64);
+                                    let (mut heart_rate, mut cadence, mut speed_tcx) = (None, None, None);
+                                    if is_tcx_file {
+                                        let (current_hr, current_cad, current_spd) = extract_tcx_data_from_waypoint(p2);
+                                        
+                                        if current_hr.is_some() { last_known_hr = current_hr; }
+                                        if current_cad.is_some() { last_known_cadence = current_cad; }
+                                        if current_spd.is_some() { last_known_speed = current_spd; }
+                                        
+                                        heart_rate = last_known_hr;
+                                        cadence = last_known_cadence;
+                                        speed_tcx = last_known_speed;
+                                    }
                                     
                                     let stats_path = format!("{}/stats_frame_{:05}.png", stats_output_dir, stats_frame_counter);
                                     
@@ -246,7 +257,7 @@ fn process_internal(
                                         heart_rate,
                                         cadence,
                                         speed_tcx,
-                                        calories
+                                        None
                                     )?;
                                     stats_output_path = Some(stats_path);
                                     stats_frame_counter += 1;
@@ -327,7 +338,6 @@ fn generate_final_video(
     let mut inputs: Vec<String> = vec!["-i".to_string(), video_path.to_str().unwrap().to_string()];
     let mut last_stream = "[0:v]".to_string();
 
-    // Overlay do velocímetro
     if add_speedo_overlay {
         let speedo_coords = get_position_coords(speedo_position);
         for (i, info) in frame_infos.iter().enumerate() {
@@ -343,7 +353,6 @@ fn generate_final_video(
         }
     }
 
-    // Overlay do mapa de trajeto
     if add_track_overlay {
         let map_coords = get_position_coords(track_position);
         let map_input_idx = inputs.len() / 2;
@@ -389,7 +398,6 @@ fn generate_final_video(
         }
     }
     
-    // Overlay de estatísticas
     if add_stats_overlay {
         let stats_coords = get_position_coords(stats_position);
         for (i, info) in frame_infos.iter().enumerate() {
@@ -456,106 +464,23 @@ fn cleanup_files(gpx_path: &Path, logs: &mut Vec<String>) {
     logs.push("Limpeza concluída.".to_string());
 }
 
-// NOVO: Estrutura para armazenar dados TCX globais
-#[derive(Debug, Clone)]
-struct TcxGlobalData {
-    has_heart_rate: bool,
-    has_cadence: bool,
-    has_speed: bool,
-    total_calories: f64,
-    average_heart_rate: Option<f64>,
-    average_cadence: Option<f64>,
-    _max_heart_rate: Option<f64>,  // Prefixado com _ para indicar que pode ser usado no futuro
-    _max_cadence: Option<f64>,      // Prefixado com _ para indicar que pode ser usado no futuro
-}
-
-// NOVO: Função para extrair dados globais TCX uma única vez
-fn extract_tcx_global_data(gpx_path: &PathBuf, logs: &mut Vec<String>, lang: &str) -> Option<TcxGlobalData> {
-    // Detectar se é um arquivo TCX
-    let file_ext = gpx_path.extension()?.to_str()?.to_lowercase();
-    if file_ext != "tcx" {
-        return None;
-    }
-    
-    // Tentar extrair dados extras do TCX
-    match crate::tcx_adapter::extract_tcx_extra_data(gpx_path) {
-        Ok(tcx_data) => {
-            logs.push(t("tcx_data_found", lang));
-            
-            Some(TcxGlobalData {
-                has_heart_rate: !tcx_data.heart_rate_data.is_empty(),
-                has_cadence: !tcx_data.cadence_data.is_empty(),
-                has_speed: !tcx_data.speed_data.is_empty(),
-                total_calories: tcx_data.total_calories,
-                average_heart_rate: tcx_data.average_heart_rate(),
-                average_cadence: tcx_data.average_cadence(),
-                _max_heart_rate: tcx_data.max_heart_rate(),
-                _max_cadence: tcx_data.max_cadence(),
-            })
-        },
-        Err(_) => None
-    }
-}
-
-// CORRIGIDO: Função para extrair dados TCX de forma consistente
-fn extract_tcx_data_for_frame(
-    point: &Waypoint, 
-    tcx_global: &Option<TcxGlobalData>,
-    frame_number: f64
-) -> (Option<f64>, Option<f64>, Option<f64>, Option<f64>) {
-    // Se não há dados TCX globais, retornar None para todos
-    let tcx_data = match tcx_global {
-        Some(data) => data,
-        None => return (None, None, None, None)
-    };
-    
+fn extract_tcx_data_from_waypoint(point: &Waypoint) -> (Option<f64>, Option<f64>, Option<f64>) {
     let mut heart_rate = None;
     let mut cadence = None;
     let mut speed = None;
-    
-    // Primeiro, tentar extrair dados específicos do ponto (se disponível)
+
     if let Some(comment) = &point.comment {
         for part in comment.split(';') {
-            if part.starts_with("HR:") && tcx_data.has_heart_rate {
+            if part.starts_with("HR:") {
                 heart_rate = part[3..].parse().ok();
-            } else if part.starts_with("Cadence:") && tcx_data.has_cadence {
+            } else if part.starts_with("Cadence:") {
                 cadence = part[8..].parse().ok();
-            } else if part.starts_with("Speed:") && tcx_data.has_speed {
-                // Converte m/s para km/h
+            } else if part.starts_with("Speed:") {
                 if let Ok(speed_ms) = part[6..].parse::<f64>() {
                     speed = Some(speed_ms * 3.6);
                 }
             }
         }
     }
-    
-    // Se não encontrou dados específicos no ponto mas TCX tem dados disponíveis,
-    // usar valores médios com pequena variação para parecer mais natural
-    if heart_rate.is_none() && tcx_data.has_heart_rate {
-        if let Some(avg_hr) = tcx_data.average_heart_rate {
-            // Adiciona uma pequena variação sinusoidal para parecer mais natural
-            let variation = (frame_number * 0.1).sin() * 3.0; // ±3 bpm de variação
-            heart_rate = Some((avg_hr + variation).max(60.0)); // Mínimo de 60 bpm
-        }
-    }
-    
-    if cadence.is_none() && tcx_data.has_cadence {
-        if let Some(avg_cad) = tcx_data.average_cadence {
-            // Adiciona uma pequena variação para parecer mais natural
-            let variation = (frame_number * 0.08).cos() * 2.0; // ±2 rpm de variação
-            cadence = Some((avg_cad + variation).max(0.0));
-        }
-    }
-    
-    // Para calorias, fazer uma estimativa progressiva crescente baseada no total
-    let calories = if tcx_data.total_calories > 0.0 {
-        // Estimar a progressão de calorias de forma mais realista
-        // Assumindo que o frame_number cresce linearmente ao longo do vídeo
-        let progress_factor = (frame_number + 1.0) / (frame_number + 100.0); // Fator de progressão suave
-        Some(tcx_data.total_calories * progress_factor * 0.5) // Ajuste para valores mais realistas
-    } else {
-        None
-    };
-    
-    (heart_rate, cadence, speed, calories)
+    (heart_rate, cadence, speed)
 }
