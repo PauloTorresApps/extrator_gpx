@@ -8,14 +8,24 @@ use gpx::Gpx;
 use chrono::{DateTime, Utc, FixedOffset};
 use crate::utils::calculate_speed_kmh;
 
-pub fn generate_speedometer_image(speed_kmh: f64, bearing: f64, g_force: f64, elevation: f64, output_path: &str, lang: &str) -> Result<(), Box<dyn Error>> {
+pub fn generate_speedometer_image(
+    speed_kmh: f64,
+    bearing: f64,
+    g_force: f64,
+    elevation: f64,
+    output_path: &str,
+    lang: &str,
+    detected_max_speed: Option<f64>, // NOVO
+) -> Result<(), Box<dyn Error>> {
     const SCALE_FACTOR: u32 = 4;
     const FINAL_IMG_SIZE: u32 = 300;
     const IMG_SIZE: u32 = FINAL_IMG_SIZE * SCALE_FACTOR;
 
     const CENTER: (i32, i32) = (IMG_SIZE as i32 / 2, IMG_SIZE as i32 / 2);
     const RADIUS: f32 = 120.0 * SCALE_FACTOR as f32;
-    const MAX_SPEED: f64 = 120.0;
+
+    let base_max = detected_max_speed.unwrap_or(120.0);
+    let max_speed = ((base_max / 10.0).ceil() * 10.0).max(20.0);
 
     let mut img = RgbaImage::new(IMG_SIZE, IMG_SIZE);
     let white = Rgba([255u8, 255, 255, 255]);
@@ -29,7 +39,8 @@ pub fn generate_speedometer_image(speed_kmh: f64, bearing: f64, g_force: f64, el
     
     draw_filled_circle_mut(&mut img, CENTER, (RADIUS + 15.0 * SCALE_FACTOR as f32) as i32, transparent_black);
 
-    let speed_ratio = speed_kmh / MAX_SPEED;
+    // --- arco proporcional ---
+    let speed_ratio = (speed_kmh / max_speed).min(1.0);
     let start_angle = 90.0;
     let sweep_angle = speed_ratio * 270.0;
     draw_arc_mut(&mut img, CENTER, RADIUS as i32, start_angle, sweep_angle, blue_arc, 12 * SCALE_FACTOR as i32);
@@ -42,9 +53,9 @@ pub fn generate_speedometer_image(speed_kmh: f64, bearing: f64, g_force: f64, el
     draw_filled_circle_mut(&mut img, (end_x as i32, end_y as i32), 6 * SCALE_FACTOR as i32, white);
 
     let scale_text = Scale::uniform(22.0 * SCALE_FACTOR as f32);
-    for i in 0..=MAX_SPEED as i32 {
+    for i in 0..=max_speed as i32 {
         if i % 5 == 0 {
-            let angle = 90.0 + (i as f64 / MAX_SPEED) * 270.0;
+            let angle = 90.0 + (i as f64 / max_speed) * 270.0;
             let rad = angle.to_radians() as f32;
             let tick_length = if i % 25 == 0 { 15.0 } else { 8.0 } * SCALE_FACTOR as f32;
             let (x1, y1) = (CENTER.0 as f32 + rad.cos() * (RADIUS - tick_length), CENTER.1 as f32 + rad.sin() * (RADIUS - tick_length));
@@ -79,7 +90,7 @@ pub fn generate_speedometer_image(speed_kmh: f64, bearing: f64, g_force: f64, el
 
     draw_polygon_mut(&mut img, &[rotated_n, rotated_e, rotated_s, rotated_w], Rgba([255, 0, 0, 255]));
 
-    let speed_color = speed_to_color(speed_kmh, MAX_SPEED);
+    let speed_color = speed_to_color(speed_kmh, max_speed);
     let scale_speed = Scale::uniform(60.0 * SCALE_FACTOR as f32);
     let speed_text = format!("{:.0}", speed_kmh);
     draw_text_mut(&mut img, speed_color, CENTER.0 + (30 * SCALE_FACTOR as i32), CENTER.1 + (50 * SCALE_FACTOR as i32), scale_speed, &font_bold, &speed_text);
@@ -112,7 +123,6 @@ pub fn generate_speedometer_image(speed_kmh: f64, bearing: f64, g_force: f64, el
     Ok(())
 }
 
-// FUNÇÃO MODIFICADA: `generate_stats_image` agora inclui dados TCX
 pub fn generate_stats_image(
     distance_km: f64,
     altitude_m: f64,
@@ -120,33 +130,30 @@ pub fn generate_stats_image(
     current_time_utc: DateTime<Utc>,
     output_path: &str,
     lang: &str,
-    // NOVOS: Parâmetros para dados TCX
     heart_rate: Option<f64>,
     cadence: Option<f64>,
     speed_kmh: Option<f64>,
     calories: Option<f64>,
+    timezone_offset_secs: i32, // NOVO
 ) -> Result<(), Box<dyn Error>> {
-    // AUMENTADO: Largura e altura para acomodar mais dados
     const WIDTH: u32 = 280;
-    const HEIGHT: u32 = 400; // Aumentado de 250 para 400
+    const HEIGHT: u32 = 420; 
     let mut img = RgbaImage::new(WIDTH, HEIGHT);
 
-    // Fundo transparente
     for pixel in img.pixels_mut() {
         *pixel = Rgba([0, 0, 0, 0]);
     }
 
     let white = Rgba([255, 255, 255, 255]);
-    let tcx_color = Rgba([3, 218, 198, 255]); // Cor especial para dados TCX
+    let tcx_color = Rgba([3, 218, 198, 255]); 
     let font_data_bold = include_bytes!("../DejaVuSans-Bold.ttf");
     let font_bold = Font::try_from_bytes(&font_data_bold[..]).ok_or("Falha ao carregar a fonte em negrito")?;
 
-    let scale_label = Scale::uniform(14.0); // Reduzido para caber mais dados
-    let scale_value = Scale::uniform(24.0); // Reduzido de 28 para 24
+    let scale_label = Scale::uniform(14.0); 
+    let scale_value = Scale::uniform(24.0); 
     let scale_sub_value = Scale::uniform(16.0);
     let y_start = 10;
-    let line_height = 50; // Reduzido de 60 para 50
-
+    let line_height = 50; 
     let mut current_y = y_start;
 
     // Distância
@@ -217,11 +224,22 @@ pub fn generate_stats_image(
     }
 
     // Horário e Data (sempre no final)
-    let brt_offset = FixedOffset::west_opt(3 * 3600).unwrap(); // Fuso horário UTC-3 (Horário de Brasília)
-    let local_time = current_time_utc.with_timezone(&brt_offset);
+    //let brt_offset = FixedOffset::west_opt(3 * 3600).unwrap(); // Fuso horário UTC-3 (Horário de Brasília)
+    // let local_time = current_time_utc.with_timezone(&brt_offset);
+
+    // let time_text = local_time.format("%H:%M").to_string();
+    // let date_text = local_time.format("%d/%m/%Y").to_string();
+
+    let tz_offset = FixedOffset::east_opt(timezone_offset_secs)
+        .unwrap_or(FixedOffset::east_opt(0).unwrap());
+    let local_time = current_time_utc.with_timezone(&tz_offset);
 
     let time_text = local_time.format("%H:%M").to_string();
     let date_text = local_time.format("%d/%m/%Y").to_string();
+
+    draw_text_mut(&mut img, white, 10, current_y, scale_value, &font_bold, &time_text);
+    draw_text_mut(&mut img, white, 10, current_y + 22, scale_sub_value, &font_bold, &date_text);
+
 
     draw_text_mut(&mut img, white, 10, current_y, scale_value, &font_bold, &time_text);
     draw_text_mut(&mut img, white, 10, current_y + 22, scale_sub_value, &font_bold, &date_text);
@@ -385,8 +403,17 @@ pub fn generate_track_map_image(
 }
 
 
-fn draw_arc_mut(image: &mut RgbaImage, center: (i32, i32), radius: i32, start_angle_deg: f64, sweep_angle_deg: f64, color: Rgba<u8>, thickness: i32) {
-    let steps = (sweep_angle_deg.abs() * 2.0).ceil() as i32;
+fn draw_arc_mut(
+    image: &mut RgbaImage,
+    center: (i32, i32),
+    radius: i32,
+    start_angle_deg: f64,
+    sweep_angle_deg: f64,
+    color: Rgba<u8>,
+    thickness: i32,
+) {
+    // steps agora depende do raio também → arcos mais suaves
+    let steps = (sweep_angle_deg.abs() * radius as f64 / 45.0).ceil() as i32;
     for i in 0..=steps {
         let percent = i as f64 / steps as f64;
         let current_angle = (start_angle_deg + sweep_angle_deg * percent).to_radians();

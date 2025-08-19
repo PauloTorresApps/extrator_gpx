@@ -215,7 +215,7 @@ fn process_internal(
                                     let bearing = calculate_bearing(p1, p2);
                                     let elevation = p2.elevation.unwrap_or(0.0);
                                     speedo_output_path = format!("{}/frame_{:05}.png", output_dir, frame_counter);
-                                    generate_speedometer_image(speed_kmh, bearing, g_force, elevation, &speedo_output_path, lang)?;
+                                    generate_speedometer_image(speed_kmh, bearing, g_force, elevation, &speedo_output_path, lang, None)?;
                                     frame_counter += 1;
                                 }
 
@@ -257,7 +257,8 @@ fn process_internal(
                                         heart_rate,
                                         cadence,
                                         speed_tcx,
-                                        None
+                                        None,
+                                        -3 * 3600,
                                     )?;
                                     stats_output_path = Some(stats_path);
                                     stats_frame_counter += 1;
