@@ -1,94 +1,125 @@
-// src/fit_adapter.rs - Adaptador para arquivos FIT do Garmin/Strava
+// src/fit_adapter.rs
 
-use std::error::Error;
+use fitparser::FitObject;
+use gpx::{Gpx, GpxVersion, Track, TrackSegment, Waypoint};
 use std::path::Path;
+use std::fs::File;
+use chrono::{TimeZone, Utc};
+use std::time::SystemTime;
+
 use crate::tcx_adapter::TcxExtraData;
 
-/// Estrutura para o resultado do processamento de um arquivo FIT
 pub struct FitProcessResult {
-    pub gpx: gpx::Gpx,
+    pub gpx: Gpx,
     pub extra_data: FitExtraData,
 }
 
-/// Estrutura para armazenar dados extras específicos do FIT
-#[derive(Debug, Default, Clone)]
+#[derive(Default)]
 pub struct FitExtraData {
     pub sport: Option<String>,
-    pub device_name: Option<String>,
-    pub manufacturer: Option<String>,
     pub total_time_seconds: f64,
     pub total_distance_meters: f64,
     pub total_calories: f64,
     pub max_speed: f64,
-    pub heart_rate_data: Vec<f64>,
-    pub cadence_data: Vec<f64>,
-    pub speed_data: Vec<f64>,
-    pub power_data: Vec<f64>,
-    pub temperature_data: Vec<f64>,
-}
-
-/// Lê e processa um arquivo FIT, convertendo para GPX com dados extras
-pub fn read_and_process_fit(_path: &Path) -> Result<FitProcessResult, Box<dyn Error>> {
-    // Por enquanto, retornar erro informativo até implementar o parser FIT completo
-    Err("Suporte FIT ainda não implementado. Use GPX ou TCX por enquanto.".into())
+    pub heart_rates: Vec<f64>,
+    pub cadences: Vec<f64>,
 }
 
 impl FitExtraData {
-    /// Converte para TcxExtraData para compatibilidade com o sistema existente
-    pub fn to_tcx_extra_data(&self) -> TcxExtraData {
+    pub fn to_tcx_extra_data(self) -> TcxExtraData {
         TcxExtraData {
-            sport: self.sport.clone(),
+            sport: self.sport,
             total_time_seconds: self.total_time_seconds,
             total_distance_meters: self.total_distance_meters,
             total_calories: self.total_calories,
             max_speed: self.max_speed,
-            heart_rate_data: self.heart_rate_data.clone(),
-            cadence_data: self.cadence_data.clone(),
-            speed_data: self.speed_data.clone(),
+            heart_rates: self.heart_rates,
+            cadences: self.cadences,
+        }
+    }
+}
+
+pub fn read_and_process_fit(path: &Path) -> Result<FitProcessResult, Box<dyn std::error::Error + Send + Sync>> {
+    let mut file = File::open(path)?;
+    let fit_data = fitparser::from_reader(&mut file)?;
+
+    let mut track_segment = TrackSegment::new();
+    let mut extra_data = FitExtraData::default();
+
+    for record in fit_data {
+        if let FitObject::Record(data_messages) = record {
+            for data_message in data_messages {
+                let mut point = Waypoint::new(
+                    geo_types::Point::new(0.0, 0.0)
+                );
+                
+                let mut lat = None;
+                let mut lon = None;
+
+                for field in data_message.fields() {
+                    match field.name() {
+                        "position_lat" => lat = field.value().as_f64(),
+                        "position_long" => lon = field.value().as_f64(),
+                        "timestamp" => {
+                            if let Some(ts_val) = field.value().as_u32() {
+                                let dt = Utc.with_ymd_and_hms(1989, 12, 31, 0, 0, 0).unwrap();
+                                let timestamp = dt + chrono::Duration::seconds(ts_val as i64);
+                                point.time = Some(SystemTime::from(timestamp).into());
+                            }
+                        },
+                        "speed" => {
+                            if let Some(val) = field.value().as_f64() {
+                                point.speed = Some(val);
+                                if val > extra_data.max_speed { extra_data.max_speed = val; }
+                            }
+                        },
+                        "distance" => {
+                            if let Some(val) = field.value().as_f64() {
+                                extra_data.total_distance_meters = val;
+                            }
+                        }
+                        "heart_rate" => {
+                            if let Some(val) = field.value().as_f64() {
+                                extra_data.heart_rates.push(val);
+                            }
+                        },
+                        "cadence" => {
+                            if let Some(val) = field.value().as_f64() {
+                                extra_data.cadences.push(val);
+                            }
+                        },
+                        _ => {}
+                    }
+                }
+
+                if let (Some(lat_val), Some(lon_val)) = (lat, lon) {
+                    point.point = geo_types::Point::new(lon_val, lat_val);
+                    track_segment.points.push(point);
+                }
+            }
+        } else if let FitObject::Session(sessions) = record {
+             for session in sessions {
+                for field in session.fields() {
+                    match field.name() {
+                        "sport" => extra_data.sport = field.value().as_string(),
+                        "total_elapsed_time" => extra_data.total_time_seconds = field.value().as_f64().unwrap_or(0.0),
+                        "total_calories" => extra_data.total_calories = field.value().as_u16().unwrap_or(0) as f64,
+                        _ => {}
+                    }
+                }
+            }
         }
     }
     
-    pub fn average_heart_rate(&self) -> Option<f64> {
-        if self.heart_rate_data.is_empty() { 
-            None 
-        } else { 
-            Some(self.heart_rate_data.iter().sum::<f64>() / self.heart_rate_data.len() as f64) 
-        }
-    }
-    
-    pub fn average_cadence(&self) -> Option<f64> {
-        if self.cadence_data.is_empty() { 
-            None 
-        } else { 
-            Some(self.cadence_data.iter().sum::<f64>() / self.cadence_data.len() as f64) 
-        }
-    }
-    
-    pub fn average_speed(&self) -> Option<f64> {
-        if self.speed_data.is_empty() { 
-            None 
-        } else { 
-            Some(self.speed_data.iter().sum::<f64>() / self.speed_data.len() as f64) 
-        }
-    }
-    
-    pub fn average_power(&self) -> Option<f64> {
-        if self.power_data.is_empty() { 
-            None 
-        } else { 
-            Some(self.power_data.iter().sum::<f64>() / self.power_data.len() as f64) 
-        }
-    }
-    
-    pub fn max_heart_rate(&self) -> Option<f64> {
-        self.heart_rate_data.iter().max_by(|a, b| a.partial_cmp(b).unwrap()).copied()
-    }
-    
-    pub fn max_cadence(&self) -> Option<f64> {
-        self.cadence_data.iter().max_by(|a, b| a.partial_cmp(b).unwrap()).copied()
-    }
-    
-    pub fn max_power(&self) -> Option<f64> {
-        self.power_data.iter().max_by(|a, b| a.partial_cmp(b).unwrap()).copied()
-    }
+    let mut track = Track::new();
+    track.segments.push(track_segment);
+
+    let mut gpx = Gpx {
+        version: GpxVersion::Gpx11,
+        creator: Some("extrator_gpx".to_string()),
+        ..Default::default()
+    };
+    gpx.tracks.push(track);
+
+    Ok(FitProcessResult { gpx, extra_data })
 }
