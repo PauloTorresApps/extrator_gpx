@@ -318,3 +318,222 @@ Esta atualização transforma o **GPX Video Sync** em uma ferramenta completa de
 - **Preparação futura** para mais formatos
 
 Esta é uma evolução natural que expande as capacidades do sistema mantendo a simplicidade de uso!
+
+# Integração Strava - GPX Video Sync
+
+Este guia explica como configurar e usar a nova funcionalidade de integração com o Strava na aplicação GPX Video Sync.
+
+## ✨ Funcionalidades Adicionadas
+
+- **Autenticação OAuth2 com Strava**: Login seguro usando credenciais Strava
+- **Lista de Atividades**: Visualiza as atividades recentes do usuário
+- **Download de Arquivos**: Suporte para FIT, TCX e GPX diretamente do Strava
+- **Suporte a Arquivos FIT**: Novo adaptador para arquivos FIT do Garmin/Strava
+- **Interface Integrada**: Funcionalidade Strava integrada à interface existente
+
+## 🔧 Configuração Inicial
+
+### 1. Criar Aplicação no Strava
+
+1. Acesse [Strava Developers](https://developers.strava.com/)
+2. Faça login com sua conta Strava
+3. Clique em "Create & Manage Your App"
+4. Preencha os dados:
+   - **Application Name**: GPX Video Sync
+   - **Category**: Data Importer
+   - **Club**: (opcional)
+   - **Website**: http://localhost:3030
+   - **Authorization Callback Domain**: localhost
+5. Anote o `Client ID` e `Client Secret` gerados
+
+### 2. Configurar Variáveis de Ambiente
+
+Crie um arquivo `.env` na raiz do projeto ou configure as seguintes variáveis de ambiente:
+
+```bash
+# Configurações Strava (OBRIGATÓRIAS)
+STRAVA_CLIENT_ID=seu_client_id_aqui
+STRAVA_CLIENT_SECRET=seu_client_secret_aqui
+STRAVA_REDIRECT_URI=http://localhost:3030/strava/callback
+
+# Opcional: Para produção, altere a URL de callback
+# STRAVA_REDIRECT_URI=https://seudominio.com/strava/callback
+```
+
+### 3. Instalar Dependências Adicionais
+
+As novas dependências já estão listadas no `Cargo.toml`:
+
+```toml
+# Dependências para Strava
+reqwest = { version = "0.11", features = ["json", "stream"] }
+serde_json = "1.0"
+base64 = "0.21"
+url = "2.4"
+tokio-util = { version = "0.7", features = ["codec"] }
+
+# Suporte para arquivos FIT
+fitparser = "0.4.0"
+```
+
+Execute:
+```bash
+cargo build
+```
+
+## 🚀 Como Usar
+
+### 1. Iniciar a Aplicação
+
+```bash
+cargo run
+```
+
+A aplicação estará disponível em `http://localhost:3030`
+
+### 2. Conectar ao Strava
+
+1. Na seção "Selecionar Ficheiros", você verá uma nova seção "🔗 Integração Strava"
+2. Clique em "Conectar ao Strava"
+3. Uma nova janela se abrirá para autenticação
+4. Faça login no Strava e autorize a aplicação
+5. A janela fechará automaticamente após sucesso
+
+### 3. Importar Atividade
+
+1. Após conectar, clique em "Carregar Atividades"
+2. Selecione o formato desejado (FIT recomendado, TCX ou GPX)
+3. Escolha uma atividade da lista
+4. Clique em "Selecionar" na atividade desejada
+5. O arquivo será baixado e processado automaticamente
+
+### 4. Continuar com Vídeo
+
+1. Após importar a atividade, carregue o arquivo de vídeo
+2. O sistema sugerirá automaticamente um ponto de sincronização
+3. Configure os overlays e processe o vídeo normalmente
+
+## 📁 Novos Arquivos Adicionados
+
+### Backend (Rust)
+- `src/strava_integration.rs` - Cliente e utilitários Strava
+- `src/fit_adapter.rs` - Suporte para arquivos FIT
+- Atualizações em `src/main.rs` - Novas rotas e funcionalidades
+
+### Frontend (JavaScript/CSS)
+- `static/js/strava-manager.js` - Gerenciador da interface Strava
+- `static/styles/strava.css` - Estilos para componentes Strava
+- Atualizações nos arquivos existentes para suporte Strava
+
+## 🔌 API Endpoints
+
+Novos endpoints adicionados:
+
+| Método | Endpoint | Descrição |
+|--------|----------|-----------|
+| GET | `/strava/auth` | Inicia processo de autenticação |
+| GET | `/strava/callback` | Processa callback de autenticação |
+| GET | `/strava/activities` | Lista atividades do usuário |
+| POST | `/strava/download/:id` | Baixa atividade específica |
+| GET | `/strava/status` | Verifica status da autenticação |
+
+## 🔒 Segurança
+
+- **OAuth2**: Autenticação segura via Strava
+- **Tokens**: Gerenciamento automático de refresh de tokens
+- **Sessões**: Armazenamento temporário em memória (produção: usar Redis/BD)
+- **Scopes**: Solicita apenas permissões necessárias (`read_all`, `activity:read_all`)
+
+## 🏗️ Formatos Suportados
+
+### Arquivo FIT
+- **Origem**: Garmin, Strava (formato nativo)
+- **Dados**: GPS, frequência cardíaca, cadência, potência, temperatura
+- **Vantagem**: Máxima precisão e dados completos
+
+### Arquivo TCX
+- **Origem**: Garmin Training Center
+- **Dados**: GPS, frequência cardíaca, cadência, calorias
+- **Vantagem**: Boa compatibilidade e dados de treino
+
+### Arquivo GPX
+- **Origem**: Padrão universal GPS
+- **Dados**: Apenas GPS e elevação básica
+- **Vantagem**: Máxima compatibilidade
+
+## 🛠️ Desenvolvimento
+
+### Estrutura dos Módulos
+
+```
+src/
+├── strava_integration.rs    # Cliente Strava API
+├── fit_adapter.rs          # Processador arquivos FIT
+├── tcx_adapter.rs          # Processador arquivos TCX (existente)
+├── main.rs                 # Rotas e handlers principais
+└── ...
+
+static/js/
+├── strava-manager.js       # Interface Strava
+├── translations.js         # Traduções atualizadas
+└── ...
+```
+
+### Adicionar Novos Formatos
+
+Para adicionar suporte a novos formatos:
+
+1. Criar novo adaptador em `src/novo_formato_adapter.rs`
+2. Implementar conversão para `TrackFileData`
+3. Adicionar detecção em `detect_file_type()`
+4. Incluir em `read_track_file()`
+
+## 🐛 Solução de Problemas
+
+### Erro: "Strava não configurado"
+- Verifique se as variáveis `STRAVA_CLIENT_ID` e `STRAVA_CLIENT_SECRET` estão definidas
+- Reinicie a aplicação após configurar as variáveis
+
+### Erro: "Autenticação negada"
+- Certifique-se de autorizar a aplicação no Strava
+- Verifique se o domínio de callback está correto na configuração da app Strava
+
+### Erro: "Não foi possível baixar atividade"
+- Algumas atividades podem ter restrições de privacidade
+- Tente com formato diferente (GPX em vez de FIT)
+- Verifique se a atividade contém dados GPS
+
+### Performance Lenta
+- Arquivos FIT são maiores mas mais precisos
+- Use GPX para processamento mais rápido
+- Ajuste o nível de interpolação nas configurações
+
+## 📈 Próximas Melhorias
+
+- [ ] Cache de atividades para acesso offline
+- [ ] Suporte a clubes e segmentos Strava
+- [ ] Integração com outras plataformas (Garmin Connect, etc.)
+- [ ] Análise automática de melhores trechos para sync
+- [ ] Export direto para Strava após processamento
+
+## 📞 Suporte
+
+- **Issues**: Use o sistema de issues do repositório
+- **Documentação Strava**: [Strava API Documentation](https://developers.strava.com/docs/)
+- **Formatos de Arquivo**: Ver documentação específica de cada formato
+
+---
+
+## 🔄 Fluxo Completo de Uso
+
+1. **Configurar** variáveis de ambiente Strava
+2. **Executar** `cargo run`
+3. **Conectar** ao Strava na interface web
+4. **Selecionar** atividade da lista
+5. **Importar** no formato desejado (FIT recomendado)
+6. **Carregar** vídeo correspondente
+7. **Ajustar** ponto de sincronização se necessário
+8. **Configurar** overlays desejados
+9. **Processar** e baixar vídeo final
+
+A funcionalidade Strava mantém **total compatibilidade** com o upload manual de arquivos GPX/TCX/FIT, oferecendo duas formas de usar a aplicação!

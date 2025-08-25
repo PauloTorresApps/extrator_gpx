@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>GPX/TCX Video Sync & Overlay</title>
+    <title>GPX/TCX/FIT Video Sync & Overlay</title>
     
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
@@ -13,12 +13,13 @@
     <link rel="stylesheet" href="styles/layout.css">
     <link rel="stylesheet" href="styles/components-ui.css">
     <link rel="stylesheet" href="styles/sections.css">
+    <link rel="stylesheet" href="styles/strava.css">
     <link rel="stylesheet" href="styles/responsive.css">
 </head>
 <body>
     <header class="main-header">
         <nav class="main-nav">
-            <a href="#" class="logo" data-i18n="main_title">🎬 GPX/TCX Video Sync</a>
+            <a href="#" class="logo" data-i18n="main_title">🎬 GPX/TCX/FIT Video Sync</a>
             <div class="nav-controls">
                 <div class="lang-switcher">
                     <button id="lang-pt" class="active">🇧🇷 PT-BR</button>
@@ -92,7 +93,7 @@
             </div>
         </div>
 
-        <p class="intro-text" data-i18n="intro_text">Carregue os seus ficheiros de trilha (GPX ou TCX), selecione um ponto de sincronização no mapa e configure os overlays para gerar o seu vídeo final com telemetria.</p>
+        <p class="intro-text" data-i18n="intro_text">Carregue os seus ficheiros de trilha (GPX, TCX ou FIT), conecte ao Strava, selecione um ponto de sincronização no mapa e configure os overlays para gerar o seu vídeo final com telemetria.</p>
         
         <div class="section">
             <div class="section-title">
@@ -100,12 +101,13 @@
                 <span class="step-number">1</span><span data-i18n="step1_title">Selecionar Ficheiros</span>
             </div>
             <div class="files-container">
+                <!-- A seção Strava será inserida aqui pelo JavaScript -->
                 <div class="file-group">
-                    <label class="file-group-label" data-i18n="gpx_file_label">Ficheiro GPX/TCX</label>
+                    <label class="file-group-label" data-i18n="gpx_file_label">Ficheiro de Trilha (GPX/TCX/FIT)</label>
                     <label class="file-upload-label">
                         <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"></path></svg>
-                        <span data-i18n="choose_gpx">Escolher GPX/TCX</span>
-                        <input type="file" id="gpx-file" accept=".gpx,.tcx">
+                        <span data-i18n="choose_gpx">Escolher GPX/TCX/FIT</span>
+                        <input type="file" id="gpx-file" accept=".gpx,.tcx,.fit">
                     </label>
                     <span id="gpx-info" class="file-info" data-i18n="no_gpx_selected">Nenhum ficheiro selecionado</span>
                 </div>
@@ -192,6 +194,7 @@
     <script src="js/map-manager.js"></script>
     <script src="js/file-handlers.js"></script>
     <script src="js/video-processor.js"></script>
+    <script src="js/strava-manager.js"></script>
     <script src="js/app-init.js"></script>
 </body>
 </html>

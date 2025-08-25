@@ -4,15 +4,18 @@ mod drawing;
 mod processing;
 mod utils;
 mod tcx_adapter;
+mod fit_adapter; // NOVO: Suporte para arquivos FIT
+mod strava_integration; // NOVO: Integração com Strava
 
 use axum::{
-    extract::{DefaultBodyLimit, Multipart},
+    extract::{DefaultBodyLimit, Multipart, Query},
     http::StatusCode,
     response::{IntoResponse, Json},
-    routing::post,
+    routing::{get, post},
     Router,
 };
-use serde::Serialize;
+use serde::{Serialize, Deserialize};
+use std::collections::HashMap;
 use std::net::SocketAddr;
 use std::path::PathBuf;
 use tower_http::services::ServeDir;
@@ -20,6 +23,8 @@ use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 use uuid::Uuid;
 use chrono::DateTime;
 use crate::tcx_adapter::TcxExtraData;
+use crate::fit_adapter::FitExtraData;
+use crate::strava_integration::{StravaClient, StravaConfig, StravaSession, StravaActivity};
 
 // Estrutura para unificar os dados lidos do arquivo de trilha
 struct TrackFileData {
@@ -27,6 +32,19 @@ struct TrackFileData {
     extra_data: Option<TcxExtraData>,
 }
 
+// NOVO: Estrutura para configuração do Strava (deve ser configurada via variáveis de ambiente)
+fn get_strava_config() -> Option<StravaConfig> {
+    let client_id = std::env::var("STRAVA_CLIENT_ID").ok()?;
+    let client_secret = std::env::var("STRAVA_CLIENT_SECRET").ok()?;
+    let redirect_uri = std::env::var("STRAVA_REDIRECT_URI")
+        .unwrap_or_else(|_| "http://localhost:3030/strava/callback".to_string());
+
+    Some(StravaConfig {
+        client_id,
+        client_secret,
+        redirect_uri,
+    })
+}
 
 #[tokio::main]
 async fn main() {
@@ -41,6 +59,12 @@ async fn main() {
     let app = Router::new()
         .route("/process", post(process_files))
         .route("/suggest", post(suggest_sync_point))
+        // NOVAS ROTAS STRAVA
+        .route("/strava/auth", get(strava_auth))
+        .route("/strava/callback", get(strava_callback))
+        .route("/strava/activities", get(strava_activities))
+        .route("/strava/download/:activity_id", post(strava_download_activity))
+        .route("/strava/status", get(strava_status))
         .nest_service("/", ServeDir::new("static"))
         .nest_service("/output", ServeDir::new("output"))
         .layer(DefaultBodyLimit::max((1024 * 1024 * 1024)*2)); // 2 GB
@@ -95,6 +119,54 @@ struct TcxExtraDataJson {
     average_speed: Option<f64>,
 }
 
+// NOVAS ESTRUTURAS PARA STRAVA
+#[derive(Serialize)]
+struct StravaAuthResponse {
+    auth_url: Option<String>,
+    error: Option<String>,
+}
+
+#[derive(Deserialize)]
+struct StravaCallbackQuery {
+    code: Option<String>,
+    state: Option<String>,
+    error: Option<String>,
+}
+
+#[derive(Serialize)]
+struct StravaCallbackResponse {
+    success: bool,
+    message: String,
+}
+
+#[derive(Serialize)]
+struct StravaActivitiesResponse {
+    success: bool,
+    activities: Option<Vec<StravaActivity>>,
+    error: Option<String>,
+}
+
+#[derive(Serialize)]
+struct StravaStatusResponse {
+    authenticated: bool,
+    athlete_id: Option<u64>,
+    token_valid: bool,
+}
+
+#[derive(Deserialize)]
+struct StravaDownloadRequest {
+    format: String, // "fit", "tcx", or "gpx"
+}
+
+// Armazenamento simples em memória para sessões (em produção, usar Redis/BD)
+use std::sync::{Arc, Mutex};
+use std::collections::HashMap as StdHashMap;
+
+lazy_static::lazy_static! {
+    static ref STRAVA_SESSIONS: Arc<Mutex<StdHashMap<String, StravaSession>>> = 
+        Arc::new(Mutex::new(StdHashMap::new()));
+}
+
 #[derive(Debug, Default)]
 struct ProcessParams {
     track_file_path: Option<PathBuf>,
@@ -118,16 +190,24 @@ fn detect_file_type(path: &PathBuf) -> String {
         .map(|ext| match ext.as_str() {
             "tcx" => "TCX".to_string(),
             "gpx" => "GPX".to_string(),
+            "fit" => "FIT".to_string(), // NOVO: Suporte FIT
             _ => "Unknown".to_string(),
         })
         .unwrap_or_else(|| "Unknown".to_string())
 }
 
-/// Função para ler arquivo de trilha (GPX ou TCX) e retornar dados unificados
+/// Função para ler arquivo de trilha (GPX, TCX ou FIT) e retornar dados unificados
 fn read_track_file(path: &PathBuf) -> Result<TrackFileData, Box<dyn std::error::Error>> {
     let file_type = detect_file_type(path);
     
     match file_type.as_str() {
+        "FIT" => {
+            let result = fit_adapter::read_and_process_fit(path)?;
+            Ok(TrackFileData {
+                gpx: result.gpx,
+                extra_data: Some(result.extra_data.to_tcx_extra_data()),
+            })
+        },
         "TCX" => {
             let result = tcx_adapter::read_and_process_tcx(path)?;
             Ok(TrackFileData {
@@ -148,6 +228,355 @@ fn read_track_file(path: &PathBuf) -> Result<TrackFileData, Box<dyn std::error::
     }
 }
 
+// NOVAS FUNÇÕES PARA STRAVA
+
+/// Inicia o processo de autenticação do Strava
+async fn strava_auth() -> impl IntoResponse {
+    match get_strava_config() {
+        Some(config) => {
+            let client = StravaClient::new(config);
+            let auth_data = client.get_auth_url(&["read_all", "activity:read_all"]);
+            
+            Json(StravaAuthResponse {
+                auth_url: Some(auth_data.auth_url),
+                error: None,
+            })
+        },
+        None => Json(StravaAuthResponse {
+            auth_url: None,
+            error: Some("Strava não configurado. Verifique as variáveis de ambiente STRAVA_CLIENT_ID e STRAVA_CLIENT_SECRET.".to_string()),
+        }),
+    }
+}
+
+/// Processa o callback da autenticação do Strava
+async fn strava_callback(Query(params): Query<StravaCallbackQuery>) -> impl IntoResponse {
+    if let Some(error) = params.error {
+        return Json(StravaCallbackResponse {
+            success: false,
+            message: format!("Erro na autenticação: {}", error),
+        });
+    }
+
+    let code = match params.code {
+        Some(c) => c,
+        None => return Json(StravaCallbackResponse {
+            success: false,
+            message: "Código de autorização não fornecido".to_string(),
+        }),
+    };
+
+    match get_strava_config() {
+        Some(config) => {
+            let client = StravaClient::new(config);
+            match client.exchange_token(&code).await {
+                Ok(token_response) => {
+                    let session_id = Uuid::new_v4().to_string();
+                    let session = StravaSession::new(token_response);
+                    
+                    // Armazenar sessão (em produção, usar cookie seguro)
+                    {
+                        let mut sessions = STRAVA_SESSIONS.lock().unwrap();
+                        sessions.insert(session_id.clone(), session);
+                    }
+                    
+                    Json(StravaCallbackResponse {
+                        success: true,
+                        message: format!("Autenticação realizada com sucesso! Session ID: {}", session_id),
+                    })
+                },
+                Err(e) => Json(StravaCallbackResponse {
+                    success: false,
+                    message: format!("Erro ao trocar token: {}", e),
+                }),
+            }
+        },
+        None => Json(StravaCallbackResponse {
+            success: false,
+            message: "Strava não configurado".to_string(),
+        }),
+    }
+}
+
+/// Lista atividades do Strava para o usuário autenticado
+async fn strava_activities(Query(params): Query<HashMap<String, String>>) -> impl IntoResponse {
+    let session_id = match params.get("session_id") {
+        Some(id) => id,
+        None => return Json(StravaActivitiesResponse {
+            success: false,
+            activities: None,
+            error: Some("Session ID não fornecido".to_string()),
+        }),
+    };
+
+    let config = match get_strava_config() {
+        Some(c) => c,
+        None => return Json(StravaActivitiesResponse {
+            success: false,
+            activities: None,
+            error: Some("Strava não configurado".to_string()),
+        }),
+    };
+
+    let client = StravaClient::new(config);
+    let mut session = {
+        let sessions = STRAVA_SESSIONS.lock().unwrap();
+        match sessions.get(session_id).cloned() {
+            Some(s) => s,
+            None => return Json(StravaActivitiesResponse {
+                success: false,
+                activities: None,
+                error: Some("Sessão não encontrada".to_string()),
+            }),
+        }
+    };
+
+    // Atualizar token se necessário
+    if let Err(e) = session.refresh_if_needed(&client).await {
+        return Json(StravaActivitiesResponse {
+            success: false,
+            activities: None,
+            error: Some(format!("Erro ao atualizar token: {}", e)),
+        });
+    }
+
+    // Buscar atividades
+    let per_page = params.get("per_page").and_then(|p| p.parse().ok()).unwrap_or(30);
+    let page = params.get("page").and_then(|p| p.parse().ok()).unwrap_or(1);
+
+    match client.list_activities(&session.access_token, Some(per_page), Some(page), None, None).await {
+        Ok(activities) => {
+            // Atualizar sessão se foi modificada
+            {
+                let mut sessions = STRAVA_SESSIONS.lock().unwrap();
+                sessions.insert(session_id.clone(), session);
+            }
+
+            Json(StravaActivitiesResponse {
+                success: true,
+                activities: Some(activities),
+                error: None,
+            })
+        },
+        Err(e) => Json(StravaActivitiesResponse {
+            success: false,
+            activities: None,
+            error: Some(format!("Erro ao buscar atividades: {}", e)),
+        }),
+    }
+}
+
+/// Baixa uma atividade do Strava no formato especificado
+async fn strava_download_activity(
+    axum::extract::Path(activity_id): axum::extract::Path<u64>,
+    Query(params): Query<HashMap<String, String>>,
+    Json(request): Json<StravaDownloadRequest>,
+) -> impl IntoResponse {
+    let session_id = match params.get("session_id") {
+        Some(id) => id,
+        None => return (StatusCode::BAD_REQUEST, Json(SuggestionResponse {
+            message: "Session ID não fornecido".to_string(),
+            latitude: None, longitude: None, timestamp: None, display_timestamp: None,
+            interpolated_points: None, file_type: None, sport_type: None, extra_data: None,
+        })),
+    };
+
+    let config = match get_strava_config() {
+        Some(c) => c,
+        None => return (StatusCode::INTERNAL_SERVER_ERROR, Json(SuggestionResponse {
+            message: "Strava não configurado".to_string(),
+            latitude: None, longitude: None, timestamp: None, display_timestamp: None,
+            interpolated_points: None, file_type: None, sport_type: None, extra_data: None,
+        })),
+    };
+
+    let client = StravaClient::new(config);
+    let mut session = {
+        let sessions = STRAVA_SESSIONS.lock().unwrap();
+        match sessions.get(session_id).cloned() {
+            Some(s) => s,
+            None => return (StatusCode::UNAUTHORIZED, Json(SuggestionResponse {
+                message: "Sessão não encontrada".to_string(),
+                latitude: None, longitude: None, timestamp: None, display_timestamp: None,
+                interpolated_points: None, file_type: None, sport_type: None, extra_data: None,
+            })),
+        }
+    };
+
+    // Atualizar token se necessário
+    if let Err(e) = session.refresh_if_needed(&client).await {
+        return (StatusCode::UNAUTHORIZED, Json(SuggestionResponse {
+            message: format!("Erro ao atualizar token: {}", e),
+            latitude: None, longitude: None, timestamp: None, display_timestamp: None,
+            interpolated_points: None, file_type: None, sport_type: None, extra_data: None,
+        }));
+    }
+
+    // Baixar atividade no formato solicitado
+    let download_result = match request.format.as_str() {
+        "fit" => client.download_activity_original(&session.access_token, activity_id).await,
+        "tcx" => client.download_activity_tcx(&session.access_token, activity_id).await,
+        "gpx" => client.download_activity_gpx(&session.access_token, activity_id).await,
+        _ => return (StatusCode::BAD_REQUEST, Json(SuggestionResponse {
+            message: "Formato não suportado. Use 'fit', 'tcx' ou 'gpx'".to_string(),
+            latitude: None, longitude: None, timestamp: None, display_timestamp: None,
+            interpolated_points: None, file_type: None, sport_type: None, extra_data: None,
+        })),
+    };
+
+    let file_bytes = match download_result {
+        Ok(bytes) => bytes,
+        Err(e) => return (StatusCode::INTERNAL_SERVER_ERROR, Json(SuggestionResponse {
+            message: format!("Erro ao baixar atividade: {}", e),
+            latitude: None, longitude: None, timestamp: None, display_timestamp: None,
+            interpolated_points: None, file_type: None, sport_type: None, extra_data: None,
+        })),
+    };
+
+    // Salvar arquivo temporário e processar
+    let upload_dir = PathBuf::from("uploads_strava");
+    tokio::fs::create_dir_all(&upload_dir).await.unwrap();
+    
+    let file_extension = match request.format.as_str() {
+        "fit" => "fit",
+        "tcx" => "tcx",
+        _ => "gpx",
+    };
+    
+    let temp_file_path = upload_dir.join(format!("strava_{}_{}.{}", activity_id, Uuid::new_v4(), file_extension));
+    
+    if let Err(e) = tokio::fs::write(&temp_file_path, &file_bytes).await {
+        return (StatusCode::INTERNAL_SERVER_ERROR, Json(SuggestionResponse {
+            message: format!("Erro ao salvar arquivo: {}", e),
+            latitude: None, longitude: None, timestamp: None, display_timestamp: None,
+            interpolated_points: None, file_type: None, sport_type: None, extra_data: None,
+        }));
+    }
+
+    // Processar arquivo usando nossa lógica existente
+    let track_file_data = match read_track_file(&temp_file_path) {
+        Ok(data) => data,
+        Err(e) => {
+            let _ = tokio::fs::remove_file(&temp_file_path).await;
+            return (StatusCode::INTERNAL_SERVER_ERROR, Json(SuggestionResponse {
+                message: format!("Erro ao processar arquivo: {}", e),
+                latitude: None, longitude: None, timestamp: None, display_timestamp: None,
+                interpolated_points: None, file_type: None, sport_type: None, extra_data: None,
+            }));
+        }
+    };
+
+    // Interpolar pontos
+    let interpolated_gpx = utils::interpolate_gpx_points(track_file_data.gpx, 1);
+
+    // Converter para JSON
+    let points_for_json: Vec<PointJson> = interpolated_gpx.tracks.iter()
+        .flat_map(|t| t.segments.iter())
+        .flat_map(|s| s.points.iter())
+        .map(|p| {
+            let (heart_rate, cadence, speed) = processing::extract_telemetry_from_waypoint(p);
+            PointJson {
+                lat: p.point().y(),
+                lon: p.point().x(),
+                time: p.time.and_then(|t| t.format().ok()),
+                heart_rate,
+                cadence,
+                speed,
+            }
+        })
+        .collect();
+
+    // Obter primeiro ponto para sugestão
+    let first_point = points_for_json.first();
+
+    let (extra_data_json, sport_type) = if let Some(extra) = track_file_data.extra_data {
+        let json = TcxExtraDataJson {
+            total_time_seconds: extra.total_time_seconds,
+            total_distance_meters: extra.total_distance_meters,
+            total_calories: extra.total_calories,
+            max_speed: extra.max_speed,
+            average_heart_rate: extra.average_heart_rate(),
+            max_heart_rate: extra.max_heart_rate(),
+            average_cadence: extra.average_cadence(),
+            max_cadence: extra.max_cadence(),
+            average_speed: extra.average_speed(),
+        };
+        (Some(json), extra.sport)
+    } else {
+        (None, None)
+    };
+
+    // Limpar arquivo temporário
+    let _ = tokio::fs::remove_file(&temp_file_path).await;
+
+    // Atualizar sessão
+    {
+        let mut sessions = STRAVA_SESSIONS.lock().unwrap();
+        sessions.insert(session_id.clone(), session);
+    }
+
+    let response = if let Some(point) = first_point {
+        SuggestionResponse {
+            message: "Atividade do Strava importada com sucesso!".to_string(),
+            latitude: Some(point.lat),
+            longitude: Some(point.lon),
+            timestamp: point.time.clone(),
+            display_timestamp: point.time.as_ref().map(|t| {
+                if let Ok(utc_time) = t.parse::<DateTime<chrono::Utc>>() {
+                    let brt_offset = chrono::FixedOffset::west_opt(3 * 3600).unwrap();
+                    let local_time = utc_time.with_timezone(&brt_offset);
+                    format!("{} (-03:00)", local_time.format("%d/%m/%Y, %H:%M:%S"))
+                } else {
+                    t.clone()
+                }
+            }),
+            interpolated_points: Some(points_for_json),
+            file_type: Some(request.format.to_uppercase()),
+            sport_type,
+            extra_data: extra_data_json,
+        }
+    } else {
+        SuggestionResponse {
+            message: "Atividade importada, mas não contém dados de localização".to_string(),
+            latitude: None, longitude: None, timestamp: None, display_timestamp: None,
+            interpolated_points: Some(points_for_json),
+            file_type: Some(request.format.to_uppercase()),
+            sport_type,
+            extra_data: extra_data_json,
+        }
+    };
+
+    (StatusCode::OK, Json(response))
+}
+
+/// Verifica o status da autenticação Strava
+async fn strava_status(Query(params): Query<HashMap<String, String>>) -> impl IntoResponse {
+    let session_id = match params.get("session_id") {
+        Some(id) => id,
+        None => return Json(StravaStatusResponse {
+            authenticated: false,
+            athlete_id: None,
+            token_valid: false,
+        }),
+    };
+
+    let sessions = STRAVA_SESSIONS.lock().unwrap();
+    if let Some(session) = sessions.get(session_id) {
+        Json(StravaStatusResponse {
+            authenticated: true,
+            athlete_id: session.athlete_id,
+            token_valid: !session.is_expired(),
+        })
+    } else {
+        Json(StravaStatusResponse {
+            authenticated: false,
+            athlete_id: None,
+            token_valid: false,
+        })
+    }
+}
+
+// Manter as funções existentes sem alteração
 async fn process_files(mut multipart: Multipart) -> impl IntoResponse {
     let mut params = ProcessParams {
         interpolation_level: 1,
@@ -160,7 +589,6 @@ async fn process_files(mut multipart: Multipart) -> impl IntoResponse {
     while let Some(field) = multipart.next_field().await.unwrap() {
         let name = field.name().unwrap().to_string();
         
-        // --- CORREÇÃO: Clona o file_name para evitar erro de borrow ---
         if let Some(file_name) = field.file_name().map(|s| s.to_string()) {
             let data = field.bytes().await.unwrap();
             let unique_id = Uuid::new_v4();
@@ -249,7 +677,6 @@ async fn suggest_sync_point(mut multipart: Multipart) -> impl IntoResponse {
     while let Some(field) = multipart.next_field().await.unwrap() {
         let name = field.name().unwrap_or("").to_string();
         
-        // --- CORREÇÃO: Clona o file_name para evitar erro de borrow ---
         if let Some(file_name_str) = field.file_name().map(|s| s.to_string()) {
             let data = field.bytes().await.unwrap();
             let unique_id = Uuid::new_v4();

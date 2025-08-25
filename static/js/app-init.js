@@ -45,12 +45,17 @@ function initializeInlineOverlaySystem() {
     inlineOverlayManager = new InlineOverlayManager();
 }
 
+function initializeStravaIntegration() {
+    stravaManager = new StravaManager();
+}
+
 // Inicialização quando DOM carregado
 document.addEventListener('DOMContentLoaded', () => {
     setLanguage(currentLang);
     
     setTimeout(() => {
         initializeInlineOverlaySystem();
+        initializeStravaIntegration(); // NOVO: Inicializar Strava
         
         if (generateBtn) {
             generateBtn.addEventListener('click', handleGenerateWithInlineOverlays);
