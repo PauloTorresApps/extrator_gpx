@@ -10,7 +10,7 @@ mod strava_integration; // NOVO: Integração com Strava
 use axum::{
     extract::{DefaultBodyLimit, Multipart, Query},
     http::StatusCode,
-    response::{IntoResponse, Json},
+    response::{IntoResponse, Json, Response},
     routing::{get, post},
     Router,
 };
@@ -23,7 +23,6 @@ use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 use uuid::Uuid;
 use chrono::DateTime;
 use crate::tcx_adapter::TcxExtraData;
-use crate::fit_adapter::FitExtraData;
 use crate::strava_integration::{StravaClient, StravaConfig, StravaSession, StravaActivity};
 
 // Estrutura para unificar os dados lidos do arquivo de trilha
@@ -374,14 +373,14 @@ async fn strava_download_activity(
     axum::extract::Path(activity_id): axum::extract::Path<u64>,
     Query(params): Query<HashMap<String, String>>,
     Json(request): Json<StravaDownloadRequest>,
-) -> impl IntoResponse {
+) -> Response {
     let session_id = match params.get("session_id") {
         Some(id) => id,
         None => return (StatusCode::BAD_REQUEST, Json(SuggestionResponse {
             message: "Session ID não fornecido".to_string(),
             latitude: None, longitude: None, timestamp: None, display_timestamp: None,
             interpolated_points: None, file_type: None, sport_type: None, extra_data: None,
-        })),
+        })).into_response(),
     };
 
     let config = match get_strava_config() {
@@ -390,7 +389,7 @@ async fn strava_download_activity(
             message: "Strava não configurado".to_string(),
             latitude: None, longitude: None, timestamp: None, display_timestamp: None,
             interpolated_points: None, file_type: None, sport_type: None, extra_data: None,
-        })),
+        })).into_response(),
     };
 
     let client = StravaClient::new(config);
@@ -412,7 +411,7 @@ async fn strava_download_activity(
             message: format!("Erro ao atualizar token: {}", e),
             latitude: None, longitude: None, timestamp: None, display_timestamp: None,
             interpolated_points: None, file_type: None, sport_type: None, extra_data: None,
-        }));
+        })).into_response();
     }
 
     // Baixar atividade no formato solicitado
@@ -424,7 +423,7 @@ async fn strava_download_activity(
             message: "Formato não suportado. Use 'fit', 'tcx' ou 'gpx'".to_string(),
             latitude: None, longitude: None, timestamp: None, display_timestamp: None,
             interpolated_points: None, file_type: None, sport_type: None, extra_data: None,
-        })),
+        })).into_response(),
     };
 
     let file_bytes = match download_result {
@@ -433,7 +432,7 @@ async fn strava_download_activity(
             message: format!("Erro ao baixar atividade: {}", e),
             latitude: None, longitude: None, timestamp: None, display_timestamp: None,
             interpolated_points: None, file_type: None, sport_type: None, extra_data: None,
-        })),
+        })).into_response(),
     };
 
     // Salvar arquivo temporário e processar
@@ -453,7 +452,7 @@ async fn strava_download_activity(
             message: format!("Erro ao salvar arquivo: {}", e),
             latitude: None, longitude: None, timestamp: None, display_timestamp: None,
             interpolated_points: None, file_type: None, sport_type: None, extra_data: None,
-        }));
+        })).into_response();
     }
 
     // Processar arquivo usando nossa lógica existente
@@ -465,7 +464,7 @@ async fn strava_download_activity(
                 message: format!("Erro ao processar arquivo: {}", e),
                 latitude: None, longitude: None, timestamp: None, display_timestamp: None,
                 interpolated_points: None, file_type: None, sport_type: None, extra_data: None,
-            }));
+            })).into_response();
         }
     };
 
@@ -549,7 +548,7 @@ async fn strava_download_activity(
         }
     };
 
-    (StatusCode::OK, Json(response))
+    (StatusCode::OK, Json(response)).into_response()
 }
 
 /// Verifica o status da autenticação Strava

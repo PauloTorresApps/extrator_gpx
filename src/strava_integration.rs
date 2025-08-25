@@ -5,9 +5,6 @@ use std::collections::HashMap;
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use reqwest::Client;
-use tokio_util::codec::{BytesCodec, FramedRead};
-use tokio_util::io::StreamReader;
-use futures_util::StreamExt;
 
 const STRAVA_API_BASE: &str = "https://www.strava.com/api/v3";
 const STRAVA_AUTH_URL: &str = "https://www.strava.com/oauth/authorize";
@@ -97,8 +94,8 @@ impl StravaClient {
     /// Troca o código de autorização por um token de acesso
     pub async fn exchange_token(&self, code: &str) -> Result<StravaTokenResponse, Box<dyn Error>> {
         let mut params = HashMap::new();
-        params.insert("client_id", &self.config.client_id);
-        params.insert("client_secret", &self.config.client_secret);
+        params.insert("client_id", self.config.client_id.as_str());
+        params.insert("client_secret", self.config.client_secret.as_str());
         params.insert("code", code);
         params.insert("grant_type", "authorization_code");
 
@@ -120,8 +117,8 @@ impl StravaClient {
     /// Atualiza o token de acesso usando o refresh token
     pub async fn refresh_token(&self, refresh_token: &str) -> Result<StravaTokenResponse, Box<dyn Error>> {
         let mut params = HashMap::new();
-        params.insert("client_id", &self.config.client_id);
-        params.insert("client_secret", &self.config.client_secret);
+        params.insert("client_id", self.config.client_id.as_str());
+        params.insert("client_secret", self.config.client_secret.as_str());
         params.insert("refresh_token", refresh_token);
         params.insert("grant_type", "refresh_token");
 
@@ -180,8 +177,9 @@ impl StravaClient {
             let activities: Vec<StravaActivity> = response.json().await?;
             Ok(activities)
         } else {
+            let status = response.status();
             let error_text = response.text().await?;
-            Err(format!("Erro ao listar atividades: {} - {}", response.status(), error_text).into())
+            Err(format!("Erro ao listar atividades: {} - {}", status, error_text).into())
         }
     }
 
@@ -199,8 +197,9 @@ impl StravaClient {
             let activity: StravaActivity = response.json().await?;
             Ok(activity)
         } else {
+            let status = response.status();
             let error_text = response.text().await?;
-            Err(format!("Erro ao obter atividade: {} - {}", response.status(), error_text).into())
+            Err(format!("Erro ao obter atividade: {} - {}", status, error_text).into())
         }
     }
 
@@ -218,8 +217,9 @@ impl StravaClient {
             let bytes = response.bytes().await?;
             Ok(bytes.to_vec())
         } else {
+            let status = response.status();
             let error_text = response.text().await?;
-            Err(format!("Erro ao baixar GPX: {} - {}", response.status(), error_text).into())
+            Err(format!("Erro ao baixar GPX: {} - {}", status, error_text).into())
         }
     }
 
@@ -237,8 +237,9 @@ impl StravaClient {
             let bytes = response.bytes().await?;
             Ok(bytes.to_vec())
         } else {
+            let status = response.status();
             let error_text = response.text().await?;
-            Err(format!("Erro ao baixar TCX: {} - {}", response.status(), error_text).into())
+            Err(format!("Erro ao baixar TCX: {} - {}", status, error_text).into())
         }
     }
 
@@ -256,8 +257,9 @@ impl StravaClient {
             let bytes = response.bytes().await?;
             Ok(bytes.to_vec())
         } else {
+            let status = response.status();
             let error_text = response.text().await?;
-            Err(format!("Erro ao baixar arquivo original: {} - {}", response.status(), error_text).into())
+            Err(format!("Erro ao baixar arquivo original: {} - {}", status, error_text).into())
         }
     }
 
@@ -308,7 +310,6 @@ impl StravaSession {
 /// Utilitário para converter dados do Strava para nossos formatos internos
 pub mod conversion_utils {
     use super::*;
-    use crate::utils::interpolate_gpx_points;
     use gpx::{Gpx, Track, TrackSegment, Waypoint};
     use geo_types::Point;
     use std::io::Cursor;

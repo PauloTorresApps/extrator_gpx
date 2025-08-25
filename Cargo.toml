@@ -36,9 +36,11 @@ serde_json = "1.0"
 base64 = "0.21"
 url = "2.4"
 tokio-util = { version = "0.7", features = ["codec"] }
+futures-util = "0.3"
+lazy_static = "1.4"
 
-# NOVA: Suporte para arquivos FIT
-fitparser = "0.4.0"
+# NOVA: Suporte para arquivos FIT (implementação futura)
+# fitparser = "0.4.0"
 
 # Para carregar variáveis do arquivo .env
 dotenv = "0.15"
