@@ -48,6 +48,9 @@ fn get_strava_config() -> Option<StravaConfig> {
 
 #[tokio::main]
 async fn main() {
+    // Carregar variáveis de ambiente do arquivo .env (se existir)
+    dotenv::dotenv().ok();
+    
     tracing_subscriber::registry()
         .with(
             tracing_subscriber::EnvFilter::try_from_default_env()

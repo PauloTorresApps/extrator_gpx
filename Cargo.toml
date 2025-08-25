@@ -39,3 +39,6 @@ tokio-util = { version = "0.7", features = ["codec"] }
 
 # NOVA: Suporte para arquivos FIT
 fitparser = "0.4.0"
+
+# Para carregar variáveis do arquivo .env
+dotenv = "0.15"
