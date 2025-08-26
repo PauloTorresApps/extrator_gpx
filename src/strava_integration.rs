@@ -5,8 +5,6 @@ use reqwest::{Client, header};
 use std::collections::HashMap;
 use std::error::Error;
 use std::time::{SystemTime, UNIX_EPOCH};
-use std::fs::File;
-use std::io::Write;
 use uuid::Uuid;
 
 const STRAVA_API_BASE_URL: &str = "https://www.strava.com/api/v3";
@@ -90,7 +88,6 @@ impl StravaSession {
 
 pub struct StravaAuthData {
     pub auth_url: String,
-    pub state: String,
 }
 
 impl StravaClient {
@@ -108,7 +105,7 @@ impl StravaClient {
             "https://www.strava.com/oauth/authorize?client_id={}&response_type=code&redirect_uri={}&approval_prompt=force&scope={}&state={}",
             self.config.client_id, self.config.redirect_uri, scope_str, state
         );
-        StravaAuthData { auth_url, state }
+        StravaAuthData { auth_url }
     }
 
     pub async fn exchange_token(&self, code: &str) -> Result<StravaTokenResponse, Box<dyn Error + Send + Sync>> {
@@ -221,20 +218,20 @@ impl StravaClient {
         Ok(bytes.to_vec())
     }
     
-    pub fn bytes_to_tcx_gpx(bytes: &[u8]) -> Result<crate::tcx_adapter::TcxProcessResult, Box<dyn Error + Send + Sync>> {
-        let temp_dir = std::env::temp_dir();
-        let temp_file_name = format!("{}.tcx", Uuid::new_v4());
-        let temp_file = temp_dir.join(temp_file_name);
+    // pub fn bytes_to_tcx_gpx(bytes: &[u8]) -> Result<crate::tcx_adapter::TcxProcessResult, Box<dyn Error + Send + Sync>> {
+    //     let temp_dir = std::env::temp_dir();
+    //     let temp_file_name = format!("{}.tcx", Uuid::new_v4());
+    //     let temp_file = temp_dir.join(temp_file_name);
         
-        {
-            let mut file = File::create(&temp_file)?;
-            file.write_all(bytes)?;
-        }
+    //     {
+    //         let mut file = File::create(&temp_file)?;
+    //         file.write_all(bytes)?;
+    //     }
 
-        let result = crate::tcx_adapter::read_and_process_tcx(&temp_file)?;
+    //     let result = crate::tcx_adapter::read_and_process_tcx(&temp_file)?;
 
-        std::fs::remove_file(&temp_file)?;
+    //     std::fs::remove_file(&temp_file)?;
 
-        Ok(result)
-    }
+    //     Ok(result)
+    // }
 }

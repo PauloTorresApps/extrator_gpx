@@ -3,8 +3,6 @@
 use std::path::Path;
 use std::fs::File;
 use std::io::Read;
-use chrono::{TimeZone, Utc};
-use time::OffsetDateTime;
 use gpx::{Gpx, GpxVersion, Track, TrackSegment, Waypoint};
 
 use crate::tcx_adapter::TcxExtraData;

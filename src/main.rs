@@ -126,7 +126,6 @@ struct StravaAuthResponse {
 #[derive(Deserialize)]
 struct StravaCallbackQuery {
     code: Option<String>,
-    state: Option<String>,
     error: Option<String>,
 }
 
