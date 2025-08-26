@@ -6,8 +6,6 @@ mod utils;
 mod tcx_adapter;
 mod fit_adapter;
 mod strava_integration;
-use chrono::{DateTime, Utc};
-use gpx::Waypoint;
 
 use axum::{
     extract::{DefaultBodyLimit, Multipart, Query, Path},
@@ -24,6 +22,7 @@ use tower_http::services::ServeDir;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 use uuid::Uuid;
 use chrono::{DateTime, Utc};
+use gpx::Waypoint;
 use crate::tcx_adapter::TcxExtraData;
 use crate::strava_integration::{StravaClient, StravaConfig, StravaSession, StravaActivity};
 
@@ -185,9 +184,12 @@ pub fn read_track_file(path: &PathBuf) -> Result<TrackFileData, Box<dyn std::err
         .map(|s| s.to_lowercase())
         .unwrap_or_default();
     
+    tracing::info!("Lendo arquivo de trilha: {:?} (tipo: {})", path, file_type);
+    
     match file_type.as_str() {
         "fit" => {
             let result = fit_adapter::read_and_process_fit(path)?;
+            tracing::info!("Arquivo FIT processado com sucesso");
             Ok(TrackFileData {
                 gpx: result.gpx,
                 extra_data: Some(result.extra_data.to_tcx_extra_data()),
@@ -195,6 +197,7 @@ pub fn read_track_file(path: &PathBuf) -> Result<TrackFileData, Box<dyn std::err
         },
         "tcx" => {
             let result = tcx_adapter::read_and_process_tcx(path)?;
+            tracing::info!("Arquivo TCX processado com sucesso");
             Ok(TrackFileData {
                 gpx: result.gpx,
                 extra_data: Some(result.extra_data),
@@ -204,6 +207,7 @@ pub fn read_track_file(path: &PathBuf) -> Result<TrackFileData, Box<dyn std::err
             use std::io::BufReader;
             use std::fs::File;
             let gpx_data = gpx::read(BufReader::new(File::open(path)?))?;
+            tracing::info!("Arquivo GPX processado com sucesso");
             Ok(TrackFileData {
                 gpx: gpx_data,
                 extra_data: None,
@@ -424,8 +428,8 @@ async fn strava_download_activity(
         .map(|p| {
             let (heart_rate, cadence, speed) = processing::extract_telemetry_from_waypoint(p);
             PointJson {
-                lat: p.point().y(),
-                lon: p.point().x(),
+                lat: p.point().y(), // Y = Latitude
+                lon: p.point().x(), // X = Longitude
                 time: p.time.as_ref().and_then(|t| t.format().ok()).map(|t| t.to_string()),
                 heart_rate,
                 cadence,
@@ -595,6 +599,7 @@ async fn process_files(mut multipart: Multipart) -> Response {
     }
 }
 
+// FUNÇÃO CORRIGIDA COM DEBUG DETALHADO
 async fn suggest_sync_point(mut multipart: Multipart) -> Response {
     let mut track_file_path: Option<PathBuf> = None;
     let mut video_path: Option<PathBuf> = None;
@@ -602,6 +607,8 @@ async fn suggest_sync_point(mut multipart: Multipart) -> Response {
 
     let upload_dir = PathBuf::from("uploads_temp_suggest");
     tokio::fs::create_dir_all(&upload_dir).await.unwrap();
+
+    tracing::info!("🔍 INÍCIO - Processando requisição de sugestão");
 
     while let Some(field) = multipart.next_field().await.unwrap() {
         let name = field.name().unwrap_or("").to_string();
@@ -612,25 +619,43 @@ async fn suggest_sync_point(mut multipart: Multipart) -> Response {
             let path = upload_dir.join(format!("{}-{}", unique_id, file_name_str));
             tokio::fs::write(&path, &data).await.unwrap();
             
-            if name == "gpxFile" { track_file_path = Some(path); }
-            else if name == "videoFile" { video_path = Some(path); }
+            tracing::info!("📁 Arquivo recebido: {} ({} bytes)", file_name_str, data.len());
+            
+            if name == "gpxFile" { 
+                track_file_path = Some(path); 
+            } else if name == "videoFile" { 
+                video_path = Some(path); 
+            }
         } else {
             let data = field.bytes().await.unwrap();
             if let Ok(value) = String::from_utf8(data.to_vec()) {
                 if name == "interpolationLevel" {
                     interpolation_level = value.parse().unwrap_or(1);
+                    tracing::info!("⚙️ Nível de interpolação: {}", interpolation_level);
                 }
             }
         }
     }
 
     let result = if let (Some(track_p), Some(video_p)) = (track_file_path, video_path) {
+        tracing::info!("📊 Processando arquivos: trilha={:?}, vídeo={:?}", track_p, video_p);
+        
         match utils::get_video_time_range(&video_p, "en") {
-            Ok((video_start_time, _)) => {
+            Ok((video_start_time, video_end_time)) => {
+                tracing::info!("🎬 Tempo do vídeo: {} a {}", video_start_time, video_end_time);
+                
                 match read_track_file(&track_p) {
                     Ok(track_file_data) => {
                         let file_type = track_p.extension().and_then(|s| s.to_str()).unwrap_or("").to_uppercase();
+                        tracing::info!("📄 Tipo de arquivo detectado: {}", file_type);
+                        
+                        // DEBUG: Verificar coordenadas antes da interpolação
+                        debug_coordinates_server(&track_file_data.gpx, "ANTES DA INTERPOLAÇÃO");
+                        
                         let interpolated_gpx = utils::interpolate_gpx_points(track_file_data.gpx, interpolation_level);
+                        
+                        // DEBUG: Verificar coordenadas após interpolação
+                        debug_coordinates_server(&interpolated_gpx, "APÓS INTERPOLAÇÃO");
                         
                         let first_point_after = interpolated_gpx
                             .tracks.iter().flat_map(|t| t.segments.iter()).flat_map(|s| s.points.iter())
@@ -660,14 +685,34 @@ async fn suggest_sync_point(mut multipart: Multipart) -> Response {
                             (None, None)
                         };
 
+                        // CORREÇÃO CRÍTICA: Garantir ordem correta das coordenadas
                         let points_for_json: Vec<PointJson> = interpolated_gpx.tracks.iter()
                             .flat_map(|t| t.segments.iter())
                             .flat_map(|s| s.points.iter())
-                            .map(|p| {
+                            .enumerate()
+                            .map(|(index, p)| {
                                 let (heart_rate, cadence, speed) = processing::extract_telemetry_from_waypoint(p);
+                                
+                                // GARANTIR: Latitude é Y, Longitude é X
+                                let latitude = p.point().y();   // Y = Latitude
+                                let longitude = p.point().x();  // X = Longitude
+                                
+                                // LOG detalhado para debug dos primeiros pontos
+                                if index < 3 {
+                                    tracing::debug!("📍 Ponto {}: lat={:.6}, lon={:.6} (ponto_y={:.6}, ponto_x={:.6})", 
+                                        index, latitude, longitude, p.point().y(), p.point().x());
+                                }
+                                
+                                // Validar coordenadas antes de enviar
+                                if latitude < -90.0 || latitude > 90.0 || longitude < -180.0 || longitude > 180.0 {
+                                    tracing::warn!("⚠️ Coordenada inválida detectada no ponto {}: lat={:.6}, lon={:.6}", 
+                                        index, latitude, longitude);
+                                }
+                                
+                                // IMPORTANTE: Usar nomes claros e consistentes
                                 PointJson {
-                                    lat: p.point().y(),
-                                    lon: p.point().x(),
+                                    lat: latitude,    // Latitude (Y)
+                                    lon: longitude,   // Longitude (X)
                                     time: p.time.as_ref().and_then(|t| t.format().ok()).map(|t| t.to_string()),
                                     heart_rate,
                                     cadence,
@@ -676,8 +721,29 @@ async fn suggest_sync_point(mut multipart: Multipart) -> Response {
                             })
                             .collect();
 
+                        tracing::info!("✅ Enviando {} pontos para o frontend", points_for_json.len());
+                        
+                        // Log dos primeiros e últimos pontos para verificação
+                        if !points_for_json.is_empty() {
+                            let first = &points_for_json[0];
+                            let last = &points_for_json[points_for_json.len() - 1];
+                            tracing::info!("🎯 Primeiro ponto: lat={:.6}, lon={:.6}", first.lat, first.lon);
+                            tracing::info!("🎯 Último ponto: lat={:.6}, lon={:.6}", last.lat, last.lon);
+                            
+                            // Calcular centro aproximado para verificação
+                            let avg_lat: f64 = points_for_json.iter().map(|p| p.lat).sum::<f64>() / points_for_json.len() as f64;
+                            let avg_lon: f64 = points_for_json.iter().map(|p| p.lon).sum::<f64>() / points_for_json.len() as f64;
+                            tracing::info!("🌍 Centro da trilha: lat={:.6}, lon={:.6}", avg_lat, avg_lon);
+                            tracing::info!("📍 Região identificada: {}", identify_region_server(avg_lat, avg_lon));
+                        }
+                        
                         if let Some(point) = first_point_after {
                             let point_coords = point.point();
+                            let latitude = point_coords.y();   // Y = Latitude  
+                            let longitude = point_coords.x();  // X = Longitude
+                            
+                            tracing::info!("🎯 Ponto de sincronização sugerido: lat={:.6}, lon={:.6}", latitude, longitude);
+                            
                             let timestamp_iso_str = point.time.as_ref().and_then(|t| t.format().ok()).unwrap_or_default();
 
                             let display_timestamp_str = if let Ok(utc_time) = timestamp_iso_str.parse::<DateTime<Utc>>() {
@@ -690,8 +756,8 @@ async fn suggest_sync_point(mut multipart: Multipart) -> Response {
 
                             (StatusCode::OK, Json(SuggestionResponse {
                                 message: "Sync point suggested.".to_string(),
-                                latitude: Some(point_coords.y()),
-                                longitude: Some(point_coords.x()),
+                                latitude: Some(latitude),     // Latitude (Y)
+                                longitude: Some(longitude),   // Longitude (X)
                                 timestamp: Some(timestamp_iso_str),
                                 display_timestamp: Some(display_timestamp_str),
                                 interpolated_points: Some(points_for_json),
@@ -700,6 +766,7 @@ async fn suggest_sync_point(mut multipart: Multipart) -> Response {
                                 extra_data: extra_data_json,
                             }))
                         } else {
+                            tracing::warn!("⚠️ Nenhum ponto da trilha encontrado após o início do vídeo");
                             (StatusCode::OK, Json(SuggestionResponse { 
                                 message: "No track point found after video start.".to_string(), 
                                 latitude: None, longitude: None, timestamp: None, display_timestamp: None,
@@ -710,20 +777,27 @@ async fn suggest_sync_point(mut multipart: Multipart) -> Response {
                             }))
                         }
                     },
-                    Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, Json(SuggestionResponse { 
-                        message: format!("Error reading track file: {}", e), 
-                        latitude: None, longitude: None, timestamp: None, display_timestamp: None,
-                        interpolated_points: None, file_type: None, sport_type: None, extra_data: None,
-                    })),
+                    Err(e) => {
+                        tracing::error!("❌ Erro ao ler arquivo de trilha: {}", e);
+                        (StatusCode::INTERNAL_SERVER_ERROR, Json(SuggestionResponse { 
+                            message: format!("Error reading track file: {}", e), 
+                            latitude: None, longitude: None, timestamp: None, display_timestamp: None,
+                            interpolated_points: None, file_type: None, sport_type: None, extra_data: None,
+                        }))
+                    }
                 }
             },
-            Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, Json(SuggestionResponse { 
-                message: format!("Error reading video metadata: {}", e), 
-                latitude: None, longitude: None, timestamp: None, display_timestamp: None,
-                interpolated_points: None, file_type: None, sport_type: None, extra_data: None,
-            })),
+            Err(e) => {
+                tracing::error!("❌ Erro ao ler metadados do vídeo: {}", e);
+                (StatusCode::INTERNAL_SERVER_ERROR, Json(SuggestionResponse { 
+                    message: format!("Error reading video metadata: {}", e), 
+                    latitude: None, longitude: None, timestamp: None, display_timestamp: None,
+                    interpolated_points: None, file_type: None, sport_type: None, extra_data: None,
+                }))
+            }
         }
     } else {
+        tracing::error!("❌ Arquivos não fornecidos");
         (StatusCode::BAD_REQUEST, Json(SuggestionResponse { 
             message: "Missing video or track file.".to_string(), 
             latitude: None, longitude: None, timestamp: None, display_timestamp: None,
@@ -731,11 +805,15 @@ async fn suggest_sync_point(mut multipart: Multipart) -> Response {
         }))
     };
     
+    // Limpeza dos arquivos temporários
     let _ = tokio::fs::remove_dir_all(&upload_dir).await;
+    tracing::info!("🧹 Arquivos temporários removidos");
+    
     result.into_response()
 }
 
-fn debug_coordinates(gpx: &gpx::Gpx, logs: &mut Vec<String>) {
+// NOVA FUNÇÃO: Debug das coordenadas no servidor com contexto
+fn debug_coordinates_server(gpx: &gpx::Gpx, context: &str) {
     let mut total_points = 0;
     let mut valid_points = 0;
     let mut lat_sum = 0.0;
@@ -744,18 +822,24 @@ fn debug_coordinates(gpx: &gpx::Gpx, logs: &mut Vec<String>) {
     let mut lat_max = f64::NEG_INFINITY;
     let mut lon_min = f64::INFINITY;
     let mut lon_max = f64::NEG_INFINITY;
+    let mut zero_points = 0;
 
     for track in &gpx.tracks {
         for segment in &track.segments {
             for point in &segment.points {
                 total_points += 1;
                 
-                let lat = point.point().y();
-                let lon = point.point().x();
+                let lat = point.point().y();  // Y = Latitude
+                let lon = point.point().x();  // X = Longitude
+                
+                // Contar pontos (0,0) suspeitos
+                if lat == 0.0 && lon == 0.0 {
+                    zero_points += 1;
+                }
                 
                 // Verificar se as coordenadas são válidas
                 if lat >= -90.0 && lat <= 90.0 && lon >= -180.0 && lon <= 180.0 && 
-                   lat != 0.0 && lon != 0.0 { // Excluir pontos (0,0) que são suspeitos
+                   !(lat == 0.0 && lon == 0.0) { // Excluir pontos (0,0) que são suspeitos
                     valid_points += 1;
                     lat_sum += lat;
                     lon_sum += lon;
@@ -769,220 +853,95 @@ fn debug_coordinates(gpx: &gpx::Gpx, logs: &mut Vec<String>) {
         }
     }
 
-    logs.push(format!("📍 DEBUG COORDENADAS:"));
-    logs.push(format!("   Total de pontos: {}", total_points));
-    logs.push(format!("   Pontos válidos: {}", valid_points));
+    tracing::debug!("📍 DEBUG COORDENADAS SERVIDOR - {}:", context);
+    tracing::debug!("   📊 Total de pontos: {}", total_points);
+    tracing::debug!("   ✅ Pontos válidos: {}", valid_points);
+    tracing::debug!("   ⚠️ Pontos (0,0) suspeitos: {}", zero_points);
     
     if valid_points > 0 {
         let avg_lat = lat_sum / valid_points as f64;
         let avg_lon = lon_sum / valid_points as f64;
         
-        logs.push(format!("   Centro aproximado: {:.6}, {:.6}", avg_lat, avg_lon));
-        logs.push(format!("   Range Latitude: {:.6} a {:.6}", lat_min, lat_max));
-        logs.push(format!("   Range Longitude: {:.6} a {:.6}", lon_min, lon_max));
+        tracing::debug!("   🌍 Centro aproximado: lat={:.6}, lon={:.6}", avg_lat, avg_lon);
+        tracing::debug!("   📏 Range Latitude: {:.6} a {:.6} (amplitude: {:.6}°)", lat_min, lat_max, lat_max - lat_min);
+        tracing::debug!("   📏 Range Longitude: {:.6} a {:.6} (amplitude: {:.6}°)", lon_min, lon_max, lon_max - lon_min);
         
         // Detectar possíveis problemas
         if (lat_max - lat_min) > 10.0 {
-            logs.push("   ⚠️ ALERTA: Range de latitude muito grande (>10°)".to_string());
+            tracing::warn!("   🚨 ALERTA: Range de latitude muito grande (>{:.1}°) - possível erro de dados", lat_max - lat_min);
         }
         
         if (lon_max - lon_min) > 10.0 {
-            logs.push("   ⚠️ ALERTA: Range de longitude muito grande (>10°)".to_string());
+            tracing::warn!("   🚨 ALERTA: Range de longitude muito grande (>{:.1}°) - possível erro de dados", lon_max - lon_min);
+        }
+        
+        if (lat_max - lat_min) < 0.001 && (lon_max - lon_min) < 0.001 {
+            tracing::warn!("   🚨 ALERTA: Todos os pontos estão muito próximos - possível ponto único");
+        }
+        
+        // Verificar se coordenadas fazem sentido geográfico
+        if lat_min > lat_max {
+            tracing::error!("   ❌ ERRO CRÍTICO: Latitude mínima > máxima - dados corrompidos");
+        }
+        
+        if lon_min > lon_max {
+            tracing::error!("   ❌ ERRO CRÍTICO: Longitude mínima > máxima - dados corrompidos");
         }
         
         // Tentar identificar região geográfica
-        let region = identify_region(avg_lat, avg_lon);
-        logs.push(format!("   📍 Região detectada: {}", region));
+        let region = identify_region_server(avg_lat, avg_lon);
+        tracing::debug!("   🗺️ Região geográfica detectada: {}", region);
+        
+        // Mostrar alguns pontos de amostra para verificação
+        let mut sample_count = 0;
+        for track in &gpx.tracks {
+            for segment in &track.segments {
+                for (idx, point) in segment.points.iter().enumerate() {
+                    if sample_count >= 3 { break; }
+                    if idx % (segment.points.len() / 3.max(1)).max(1) == 0 {
+                        let lat = point.point().y();
+                        let lon = point.point().x();
+                        tracing::debug!("   📍 Amostra {}: lat={:.6}, lon={:.6}", sample_count + 1, lat, lon);
+                        sample_count += 1;
+                    }
+                }
+                if sample_count >= 3 { break; }
+            }
+            if sample_count >= 3 { break; }
+        }
     } else {
-        logs.push("   ❌ ERRO: Nenhuma coordenada válida encontrada!".to_string());
+        tracing::error!("   ❌ ERRO CRÍTICO: Nenhuma coordenada válida encontrada!");
+        tracing::error!("   📊 Estatísticas dos pontos inválidos:");
+        tracing::error!("      - Pontos (0,0): {}", zero_points);
+        tracing::error!("      - Pontos fora dos limites: {}", total_points - valid_points - zero_points);
     }
+    
+    tracing::debug!("📍 FIM DEBUG COORDENADAS - {}", context);
 }
 
-fn identify_region(lat: f64, lon: f64) -> String {
-    // Identificar região geográfica aproximada
+fn identify_region_server(lat: f64, lon: f64) -> String {
+    // Identificar região geográfica aproximada com mais precisão
     if lat >= -35.0 && lat <= 5.0 && lon >= -75.0 && lon <= -30.0 {
         "Brasil".to_string()
     } else if lat >= 24.0 && lat <= 49.0 && lon >= -125.0 && lon <= -66.0 {
         "Estados Unidos".to_string()
     } else if lat >= 35.0 && lat <= 71.0 && lon >= -10.0 && lon <= 40.0 {
         "Europa".to_string()
-    } else if lat >= 0.0 && lat <= 0.0 && lon >= 0.0 && lon <= 0.0 {
-        "Coordenadas (0,0) - ERRO SUSPEITO".to_string()
+    } else if lat >= -55.0 && lat <= -10.0 && lon >= 110.0 && lon <= 155.0 {
+        "Austrália".to_string()
+    } else if lat >= 20.0 && lat <= 50.0 && lon >= 70.0 && lon <= 140.0 {
+        "Ásia".to_string()
+    } else if lat >= -35.0 && lat <= 37.0 && lon >= -20.0 && lon <= 55.0 {
+        "África".to_string()
+    } else if lat >= -90.0 && lat <= -60.0 {
+        "Antártica".to_string()
+    } else if lat >= 60.0 && lat <= 90.0 {
+        "Região Ártica".to_string()
+    } else if lat.abs() < 0.001 && lon.abs() < 0.001 {
+        "⚠️ Coordenadas (0,0) - ERRO SUSPEITO".to_string()
+    } else if lat < -90.0 || lat > 90.0 || lon < -180.0 || lon > 180.0 {
+        "❌ Coordenadas INVÁLIDAS".to_string()
     } else {
-        format!("Região desconhecida (lat: {:.2}, lon: {:.2})", lat, lon)
+        format!("Oceano/Região remota (lat: {:.2}°, lon: {:.2}°)", lat, lon)
     }
 }
-
-// Modificar a função suggest_sync_point para incluir debug
-// async fn suggest_sync_point(mut multipart: Multipart) -> Response {
-//     let mut track_file_path: Option<PathBuf> = None;
-//     let mut video_path: Option<PathBuf> = None;
-//     let mut interpolation_level: i64 = 1;
-
-//     let upload_dir = PathBuf::from("uploads_temp_suggest");
-//     tokio::fs::create_dir_all(&upload_dir).await.unwrap();
-
-//     while let Some(field) = multipart.next_field().await.unwrap() {
-//         let name = field.name().unwrap_or("").to_string();
-        
-//         if let Some(file_name_str) = field.file_name().map(|s| s.to_string()) {
-//             let data = field.bytes().await.unwrap();
-//             let unique_id = Uuid::new_v4();
-//             let path = upload_dir.join(format!("{}-{}", unique_id, file_name_str));
-//             tokio::fs::write(&path, &data).await.unwrap();
-            
-//             if name == "gpxFile" { track_file_path = Some(path); }
-//             else if name == "videoFile" { video_path = Some(path); }
-//         } else {
-//             let data = field.bytes().await.unwrap();
-//             if let Ok(value) = String::from_utf8(data.to_vec()) {
-//                 if name == "interpolationLevel" {
-//                     interpolation_level = value.parse().unwrap_or(1);
-//                 }
-//             }
-//         }
-//     }
-
-//     let result = if let (Some(track_p), Some(video_p)) = (track_file_path, video_path) {
-//         match utils::get_video_time_range(&video_p, "en") {
-//             Ok((video_start_time, _)) => {
-//                 match read_track_file(&track_p) {
-//                     Ok(track_file_data) => {
-//                         let file_type = track_p.extension().and_then(|s| s.to_str()).unwrap_or("").to_uppercase();
-                        
-//                         // DEBUG: Verificar coordenadas antes da interpolação
-//                         let mut debug_logs = Vec::new();
-//                         debug_coordinates(&track_file_data.gpx, &mut debug_logs);
-//                         tracing::debug!("Coordenadas debugadas:\n{}", debug_logs.join("\n"));
-                        
-//                         let interpolated_gpx = utils::interpolate_gpx_points(track_file_data.gpx, interpolation_level);
-                        
-//                         // DEBUG: Verificar coordenadas após interpolação
-//                         debug_coordinates(&interpolated_gpx, &mut debug_logs);
-//                         tracing::debug!("Coordenadas após interpolação:\n{}", debug_logs.join("\n"));
-                        
-//                         let first_point_after = interpolated_gpx
-//                             .tracks.iter().flat_map(|t| t.segments.iter()).flat_map(|s| s.points.iter())
-//                             .find(|p| {
-//                                 if let Some(time) = p.time.as_ref().and_then(|t| t.format().ok()) {
-//                                     if let Ok(parsed_time) = time.parse::<DateTime<Utc>>() {
-//                                         return parsed_time > video_start_time;
-//                                     }
-//                                 }
-//                                 false
-//                             });
-
-//                         let (extra_data_json, sport_type) = if let Some(tcx_extra) = track_file_data.extra_data {
-//                             let json = TcxExtraDataJson {
-//                                 total_time_seconds: tcx_extra.total_time_seconds,
-//                                 total_distance_meters: tcx_extra.total_distance_meters,
-//                                 total_calories: tcx_extra.total_calories,
-//                                 max_speed: tcx_extra.max_speed,
-//                                 average_heart_rate: tcx_extra.average_heart_rate(),
-//                                 max_heart_rate: tcx_extra.max_heart_rate(),
-//                                 average_cadence: tcx_extra.average_cadence(),
-//                                 max_cadence: tcx_extra.max_cadence(),
-//                                 average_speed: tcx_extra.average_speed(),
-//                             };
-//                             (Some(json), tcx_extra.sport)
-//                         } else {
-//                             (None, None)
-//                         };
-
-//                         let points_for_json: Vec<PointJson> = interpolated_gpx.tracks.iter()
-//                             .flat_map(|t| t.segments.iter())
-//                             .flat_map(|s| s.points.iter())
-//                             .map(|p| {
-//                                 let (heart_rate, cadence, speed) = processing::extract_telemetry_from_waypoint(p);
-                                
-//                                 // IMPORTANTE: Garantir ordem correta das coordenadas
-//                                 let lat = p.point().y(); // Latitude (Y)
-//                                 let lon = p.point().x(); // Longitude (X)
-                                
-//                                 // Validar coordenadas antes de enviar
-//                                 if lat < -90.0 || lat > 90.0 || lon < -180.0 || lon > 180.0 {
-//                                     tracing::warn!("Coordenada inválida detectada: lat={}, lon={}", lat, lon);
-//                                 }
-                                
-//                                 PointJson {
-//                                     lat, // Latitude
-//                                     lon, // Longitude  
-//                                     time: p.time.as_ref().and_then(|t| t.format().ok()).map(|t| t.to_string()),
-//                                     heart_rate,
-//                                     cadence,
-//                                     speed,
-//                                 }
-//                             })
-//                             .collect();
-
-//                         tracing::info!("Enviando {} pontos para o frontend", points_for_json.len());
-                        
-//                         if let Some(point) = first_point_after {
-//                             let point_coords = point.point();
-//                             let lat = point_coords.y(); // Latitude
-//                             let lon = point_coords.x(); // Longitude
-                            
-//                             tracing::info!("Ponto de sincronização sugerido: lat={}, lon={}", lat, lon);
-                            
-//                             let timestamp_iso_str = point.time.as_ref().and_then(|t| t.format().ok()).unwrap_or_default();
-
-//                             let display_timestamp_str = if let Ok(utc_time) = timestamp_iso_str.parse::<DateTime<Utc>>() {
-//                                 let brt_offset = chrono::FixedOffset::west_opt(3 * 3600).unwrap();
-//                                 let local_time = utc_time.with_timezone(&brt_offset);
-//                                 format!("{} (-03:00)", local_time.format("%d/%m/%Y, %H:%M:%S"))
-//                             } else {
-//                                 timestamp_iso_str.clone()
-//                             };
-
-//                             (StatusCode::OK, Json(SuggestionResponse {
-//                                 message: "Sync point suggested.".to_string(),
-//                                 latitude: Some(lat), // Latitude
-//                                 longitude: Some(lon), // Longitude
-//                                 timestamp: Some(timestamp_iso_str),
-//                                 display_timestamp: Some(display_timestamp_str),
-//                                 interpolated_points: Some(points_for_json),
-//                                 file_type: Some(file_type),
-//                                 sport_type,
-//                                 extra_data: extra_data_json,
-//                             }))
-//                         } else {
-//                             (StatusCode::OK, Json(SuggestionResponse { 
-//                                 message: "No track point found after video start.".to_string(), 
-//                                 latitude: None, longitude: None, timestamp: None, display_timestamp: None,
-//                                 interpolated_points: Some(points_for_json),
-//                                 file_type: Some(file_type),
-//                                 sport_type,
-//                                 extra_data: extra_data_json,
-//                             }))
-//                         }
-//                     },
-//                     Err(e) => {
-//                         tracing::error!("Erro ao ler arquivo de trilha: {}", e);
-//                         (StatusCode::INTERNAL_SERVER_ERROR, Json(SuggestionResponse { 
-//                             message: format!("Error reading track file: {}", e), 
-//                             latitude: None, longitude: None, timestamp: None, display_timestamp: None,
-//                             interpolated_points: None, file_type: None, sport_type: None, extra_data: None,
-//                         }))
-//                     }
-//                 }
-//             },
-//             Err(e) => {
-//                 tracing::error!("Erro ao ler metadados do vídeo: {}", e);
-//                 (StatusCode::INTERNAL_SERVER_ERROR, Json(SuggestionResponse { 
-//                     message: format!("Error reading video metadata: {}", e), 
-//                     latitude: None, longitude: None, timestamp: None, display_timestamp: None,
-//                     interpolated_points: None, file_type: None, sport_type: None, extra_data: None,
-//                 }))
-//             }
-//         }
-//     } else {
-//         (StatusCode::BAD_REQUEST, Json(SuggestionResponse { 
-//             message: "Missing video or track file.".to_string(), 
-//             latitude: None, longitude: None, timestamp: None, display_timestamp: None,
-//             interpolated_points: None, file_type: None, sport_type: None, extra_data: None,
-//         }))
-//     };
-    
-//     let _ = tokio::fs::remove_dir_all(&upload_dir).await;
-//     result.into_response()
-// }

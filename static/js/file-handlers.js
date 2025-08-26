@@ -1,4 +1,4 @@
-// js/file-handlers.js - Manipulação de arquivos corrigida e melhorada
+// js/file-handlers.js - Manipulação de arquivos CORRIGIDA
 
 // Variáveis de estado dos arquivos
 let gpxFile = null;
@@ -126,17 +126,26 @@ function checkAndShowMapSection() {
         syncPointInfo.style.display = 'block';
         syncPointInfo.textContent = t('map_click_prompt');
         
-        // Invalidar tamanho do mapa após mostrar
+        // CORREÇÃO: Invalidar tamanho do mapa após mostrar e aguardar
         setTimeout(() => {
             if (map) {
+                console.log('🗺️ Invalidando tamanho do mapa...');
                 map.invalidateSize();
+                
+                // Se já temos pontos, reajustar o zoom
+                if (gpxDataPoints && gpxDataPoints.length > 0) {
+                    console.log('🗺️ Reajustando zoom para pontos existentes...');
+                    displayTrack(gpxDataPoints);
+                }
             }
-        }, 100);
+        }, 300); // Tempo suficiente para a transição CSS
     } 
 }
 
 async function fetchAndApplySuggestion() {
     if (!gpxFile || !videoFile) return;
+    
+    console.log('🔍 INÍCIO - Buscando sugestão de sincronização...');
     
     // Mostrar indicador de carregamento
     const originalGpxInfo = gpxInfo.textContent;
@@ -150,58 +159,136 @@ async function fetchAndApplySuggestion() {
     formData.append('interpolationLevel', interpolationSlider?.value || '1');
     
     try {
+        console.log('📡 Enviando requisição para /suggest...');
+        
         const response = await fetch('/suggest', { 
             method: 'POST', 
             body: formData 
         });
+        
+        console.log('📡 Resposta recebida:', response.status, response.statusText);
         
         if (!response.ok) {
             throw new Error(`HTTP ${response.status}: ${response.statusText}`);
         }
         
         const data = await response.json();
+        console.log('📊 Dados recebidos:', data);
         
         // Restaurar texto original
         gpxInfo.textContent = originalGpxInfo;
         
+        // CORREÇÃO: Processar pontos interpolados
         if (data.interpolated_points && data.interpolated_points.length > 0) {
+            console.log(`✅ ${data.interpolated_points.length} pontos interpolados recebidos`);
+            
             notify.success(t('notification_suggestion'), 
                 `Trilha carregada: ${data.interpolated_points.length} pontos`);
             
-            // Converter timestamps para objetos Date
-            gpxDataPoints = data.interpolated_points.map(p => ({ 
-                ...p, 
-                time: p.time ? new Date(p.time) : null 
-            }));
+            // CORREÇÃO: Converter timestamps e validar dados
+            const processedPoints = data.interpolated_points
+                .map((p, index) => {
+                    // Validar estrutura do ponto
+                    if (!p || (typeof p.lat === 'undefined' && typeof p.latitude === 'undefined')) {
+                        console.warn(`⚠️ Ponto ${index} sem coordenadas válidas:`, p);
+                        return null;
+                    }
+                    
+                    // Normalizar estrutura
+                    const processedPoint = {
+                        lat: p.lat || p.latitude,
+                        lon: p.lon || p.longitude,
+                        time: p.time ? new Date(p.time) : null,
+                        heart_rate: p.heart_rate,
+                        cadence: p.cadence,
+                        speed: p.speed,
+                        original_index: index
+                    };
+                    
+                    // Validar coordenadas
+                    const lat = parseFloat(processedPoint.lat);
+                    const lon = parseFloat(processedPoint.lon);
+                    
+                    if (isNaN(lat) || isNaN(lon) || lat < -90 || lat > 90 || lon < -180 || lon > 180) {
+                        console.warn(`⚠️ Ponto ${index} com coordenadas inválidas:`, {lat, lon});
+                        return null;
+                    }
+                    
+                    processedPoint.lat = lat;
+                    processedPoint.lon = lon;
+                    
+                    return processedPoint;
+                })
+                .filter(p => p !== null); // Remover pontos inválidos
             
-            displayTrack(gpxDataPoints);
+            console.log(`✅ ${processedPoints.length} pontos válidos após processamento`);
+            
+            if (processedPoints.length > 0) {
+                // Armazenar pontos globalmente
+                gpxDataPoints = processedPoints;
+                
+                // DEBUG: Mostrar amostra dos pontos
+                console.log('🔍 Amostra dos primeiros 3 pontos processados:');
+                processedPoints.slice(0, 3).forEach((p, i) => {
+                    console.log(`Ponto ${i}:`, {
+                        lat: p.lat,
+                        lon: p.lon,
+                        time: p.time,
+                        speed: p.speed
+                    });
+                });
+                
+                // Exibir trilha no mapa
+                displayTrack(processedPoints);
+            } else {
+                console.error('❌ Nenhum ponto válido após processamento');
+                notify.error(t('notification_error'), 'Nenhuma coordenada válida encontrada nos dados');
+            }
             
             // Mostrar informações extras do arquivo
             if (data.file_type && (data.file_type === 'TCX' || data.file_type === 'FIT') && data.extra_data) {
                 showExtraTrackInfo(data.extra_data, data.sport_type, data.file_type);
             }
+        } else {
+            console.warn('⚠️ Nenhum ponto interpolado recebido');
+            notify.warning(t('notification_suggestion'), 'Nenhum ponto de trilha válido encontrado');
         }
         
-        // Aplicar sugestão de ponto de sincronização
-        if (response.ok && data.timestamp && data.latitude && data.longitude) {
+        // CORREÇÃO: Aplicar sugestão de ponto de sincronização
+        if (data.timestamp && data.latitude && data.longitude) {
+            console.log('🎯 Aplicando sugestão de sincronização...');
+            
             const suggestedPoint = { 
-                lat: data.latitude, 
-                lon: data.longitude, 
+                lat: parseFloat(data.latitude), 
+                lon: parseFloat(data.longitude), 
                 time: new Date(data.timestamp), 
                 displayTime: data.display_timestamp 
             };
             
-            selectSyncPoint(suggestedPoint, true);
-            notify.success(t('notification_suggestion'), 
-                `Ponto de sincronização sugerido: ${data.display_timestamp}`);
-        } else if (data.interpolated_points && data.interpolated_points.length > 0) {
-            // Se temos pontos mas não conseguimos sugerir sincronização
-            notify.warning(t('notification_suggestion'), 
-                'Trilha carregada, mas selecione manualmente o ponto de sincronização.');
+            // Validar coordenadas sugeridas
+            if (!isNaN(suggestedPoint.lat) && !isNaN(suggestedPoint.lon) &&
+                suggestedPoint.lat >= -90 && suggestedPoint.lat <= 90 &&
+                suggestedPoint.lon >= -180 && suggestedPoint.lon <= 180) {
+                
+                console.log('✅ Ponto de sincronização válido:', suggestedPoint);
+                selectSyncPoint(suggestedPoint, true);
+                notify.success(t('notification_suggestion'), 
+                    `Ponto de sincronização sugerido: ${data.display_timestamp || 'horário válido'}`);
+            } else {
+                console.error('❌ Coordenadas de sincronização inválidas:', suggestedPoint);
+                notify.warning(t('notification_suggestion'), 
+                    'Ponto de sincronização inválido. Selecione manualmente no mapa.');
+            }
+        } else if (gpxDataPoints && gpxDataPoints.length > 0) {
+            console.log('⚠️ Sem sugestão específica, mas trilha carregada');
+            notify.info(t('notification_suggestion'), 
+                'Trilha carregada. Selecione manualmente o ponto de sincronização no mapa.');
         }
         
+        console.log('✅ SUCESSO - Sugestão processada com sucesso');
+        
     } catch (error) {
-        console.error("Erro ao chamar endpoint /suggest:", error);
+        console.error('❌ ERRO - Falha ao buscar sugestão:', error);
         
         // Restaurar texto original
         gpxInfo.textContent = originalGpxInfo;
@@ -215,11 +302,15 @@ async function fetchAndApplySuggestion() {
                 'Selecione manualmente um ponto no mapa para sincronização.');
         }
     }
+    
+    console.log('🔍 FIM - Processamento de sugestão finalizado');
 }
 
 function showExtraTrackInfo(extraData, sportType, fileType) {
     const trackInfoDiv = document.getElementById('track-info');
     if (!trackInfoDiv) return;
+    
+    console.log('📊 Mostrando informações extras:', { extraData, sportType, fileType });
     
     let infoHtml = `<h4>📊 ${fileType} - ${t('tcx_extra_data_loaded')}</h4>`;
     
@@ -277,24 +368,15 @@ function showExtraTrackInfo(extraData, sportType, fileType) {
 }
 
 function resetTrackData() {
+    console.log('🧹 Resetando dados da trilha...');
+    
     // Limpar dados da trilha anterior
     gpxDataPoints = [];
     selectedSyncPoint = null;
     
     // Limpar mapa
-    if (trackLayer && map) {
-        map.removeLayer(trackLayer);
-        trackLayer = null;
-    }
-    
-    if (userMarker && map) {
-        map.removeLayer(userMarker);
-        userMarker = null;
-    }
-    
-    if (suggestionMarker && map) {
-        map.removeLayer(suggestionMarker);
-        suggestionMarker = null;
+    if (typeof clearMap === 'function') {
+        clearMap();
     }
     
     // Ocultar seções
@@ -306,6 +388,8 @@ function resetTrackData() {
         trackInfoDiv.style.display = 'none';
         trackInfoDiv.innerHTML = '';
     }
+    
+    console.log('✅ Dados da trilha resetados');
 }
 
 function hideMapAndPositionSections() {
@@ -376,6 +460,8 @@ function validateFiles() {
 
 // Função para limpar tudo
 function resetAllFiles() {
+    console.log('🧹 Resetando todos os arquivos...');
+    
     gpxFile = null;
     videoFile = null;
     
@@ -393,4 +479,55 @@ function resetAllFiles() {
     
     resetTrackData();
     validateGenerateButton();
+    
+    console.log('✅ Todos os arquivos resetados');
 }
+
+// NOVO: Função de debug para testar com arquivo sintético
+function createSyntheticGpxFile() {
+    const gpxContent = `<?xml version="1.0" encoding="UTF-8"?>
+<gpx version="1.1" creator="test">
+    <trk>
+        <trkseg>
+            <trkpt lat="-15.7939" lon="-47.8828">
+                <time>2023-01-01T10:00:00Z</time>
+            </trkpt>
+            <trkpt lat="-15.7949" lon="-47.8838">
+                <time>2023-01-01T10:00:30Z</time>
+            </trkpt>
+            <trkpt lat="-15.7959" lon="-47.8848">
+                <time>2023-01-01T10:01:00Z</time>
+            </trkpt>
+        </trkseg>
+    </trk>
+</gpx>`;
+    
+    const blob = new Blob([gpxContent], { type: 'application/gpx+xml' });
+    const file = new File([blob], 'test.gpx', { type: 'application/gpx+xml' });
+    
+    // Simular seleção do arquivo
+    gpxFile = file;
+    gpxInfo.textContent = `🗺️ GPX: test.gpx (sintético)`;
+    videoInput.disabled = false;
+    videoInfo.textContent = t('can_select_video');
+    
+    notify.info('Debug', 'Arquivo GPX sintético criado para teste');
+    
+    // Simular dados processados
+    const syntheticPoints = [
+        { lat: -15.7939, lon: -47.8828, time: new Date('2023-01-01T10:00:00Z'), speed: 10 },
+        { lat: -15.7949, lon: -47.8838, time: new Date('2023-01-01T10:00:30Z'), speed: 15 },
+        { lat: -15.7959, lon: -47.8848, time: new Date('2023-01-01T10:01:00Z'), speed: 20 }
+    ];
+    
+    gpxDataPoints = syntheticPoints;
+    
+    setTimeout(() => {
+        displayTrack(syntheticPoints);
+        selectSyncPoint(syntheticPoints[1], true);
+    }, 500);
+}
+
+// Expor função para debug
+window.createSyntheticGpxFile = createSyntheticGpxFile;
+window.resetAllFiles = resetAllFiles;
