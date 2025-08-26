@@ -1,4 +1,4 @@
-// js/strava-manager.js - Gerenciamento da integração com Strava
+// js/strava-manager.js - Layout corrigido e funcionalidade melhorada
 
 class StravaManager {
     constructor() {
@@ -6,6 +6,7 @@ class StravaManager {
         this.isAuthenticated = false;
         this.activities = [];
         this.selectedActivity = null;
+        this.isExpanded = false; // NOVO: controla se a seção está expandida
         
         this.init();
     }
@@ -27,30 +28,35 @@ class StravaManager {
         const filesContainer = document.querySelector('.files-container');
         if (!filesContainer) return;
         
-        // Adicionar seção do Strava antes dos uploads manuais
+        // Adicionar seção do Strava COMPACTA por padrão
         const stravaSection = document.createElement('div');
-        stravaSection.className = 'file-group strava-integration';
+        stravaSection.className = 'file-group strava-integration collapsed'; // NOVO: collapsed por padrão
         stravaSection.innerHTML = `
-            <label class="file-group-label">
+            <label class="file-group-label strava-toggle" id="strava-toggle">
                 <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="#fc4c02">
                     <path d="M15.387 17.064l-4.834-12.351c-.348-.854-1.556-.854-1.904 0L4.815 17.064c-.348.854.389 1.791 1.301 1.533l3.862-1.096c.681-.194 1.408-.194 2.089 0l3.862 1.096c.912.258 1.649-.679 1.301-1.533z"/>
                 </svg>
-                <span data-i18n="strava_integration">🔗 Integração Strava</span>
+                <span data-i18n="strava_integration">🔗 Conectar ao Strava</span>
+                <span class="expand-indicator">▼</span>
             </label>
-            <div id="strava-content">
+            <div id="strava-content" class="strava-content hidden">
                 <div id="strava-not-connected" class="strava-state">
+                    <div class="strava-info">
+                        <p data-i18n="strava_connect_desc">Conecte-se ao Strava para importar suas atividades diretamente.</p>
+                    </div>
                     <button id="strava-connect-btn" class="strava-btn primary">
                         <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
                             <path d="M15.387 17.064l-4.834-12.351c-.348-.854-1.556-.854-1.904 0L4.815 17.064c-.348.854.389 1.791 1.301 1.533l3.862-1.096c.681-.194 1.408-.194 2.089 0l3.862 1.096c.912.258 1.649-.679 1.301-1.533z"/>
                         </svg>
                         <span data-i18n="strava_connect">Conectar ao Strava</span>
                     </button>
-                    <div class="strava-info">
-                        <p data-i18n="strava_connect_desc">Conecte-se ao Strava para importar suas atividades diretamente.</p>
-                    </div>
                 </div>
                 
                 <div id="strava-connected" class="strava-state hidden">
+                    <div class="strava-status">
+                        <span class="status-indicator connected">✓</span>
+                        <span data-i18n="strava_connected_status">Conectado ao Strava</span>
+                    </div>
                     <div class="strava-controls">
                         <button id="strava-activities-btn" class="strava-btn secondary">
                             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -106,31 +112,83 @@ class StravaManager {
     }
     
     addEventListeners() {
+        // Toggle para expandir/recolher seção Strava
+        const toggleBtn = document.getElementById('strava-toggle');
+        if (toggleBtn) {
+            toggleBtn.addEventListener('click', (e) => {
+                e.preventDefault();
+                this.toggleStravaSection();
+            });
+        }
+        
         const connectBtn = document.getElementById('strava-connect-btn');
         const disconnectBtn = document.getElementById('strava-disconnect-btn');
         const activitiesBtn = document.getElementById('strava-activities-btn');
         const retryBtn = document.getElementById('strava-retry-btn');
         
         if (connectBtn) {
-            connectBtn.addEventListener('click', () => this.initiateAuth());
+            connectBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                this.initiateAuth();
+            });
         }
         
         if (disconnectBtn) {
-            disconnectBtn.addEventListener('click', () => this.disconnect());
+            disconnectBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                this.disconnect();
+            });
         }
         
         if (activitiesBtn) {
-            activitiesBtn.addEventListener('click', () => this.loadActivities());
+            activitiesBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                this.loadActivities();
+            });
         }
         
         if (retryBtn) {
-            retryBtn.addEventListener('click', () => this.clearError());
+            retryBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                this.clearError();
+            });
+        }
+    }
+    
+    toggleStravaSection() {
+        const stravaSection = document.querySelector('.strava-integration');
+        const stravaContent = document.getElementById('strava-content');
+        const indicator = document.querySelector('.expand-indicator');
+        
+        this.isExpanded = !this.isExpanded;
+        
+        if (this.isExpanded) {
+            stravaSection.classList.remove('collapsed');
+            stravaContent.classList.remove('hidden');
+            indicator.textContent = '▲';
+            
+            // Se não está autenticado, expandir automaticamente
+            if (!this.isAuthenticated) {
+                this.showState('not-connected');
+            }
+        } else {
+            stravaSection.classList.add('collapsed');
+            stravaContent.classList.add('hidden');
+            indicator.textContent = '▼';
         }
     }
     
     showState(state) {
+        // Expandir automaticamente quando houver mudança de estado
+        if (!this.isExpanded && state !== 'not-connected') {
+            this.toggleStravaSection();
+        }
+        
         document.querySelectorAll('.strava-state').forEach(el => el.classList.add('hidden'));
-        document.getElementById(`strava-${state}`).classList.remove('hidden');
+        const targetElement = document.getElementById(`strava-${state}`);
+        if (targetElement) {
+            targetElement.classList.remove('hidden');
+        }
     }
     
     showError(message) {
@@ -160,7 +218,7 @@ class StravaManager {
                     if (authWindow.closed) {
                         clearInterval(checkClosed);
                         // Verificar se a autenticação foi bem-sucedida
-                        setTimeout(() => this.checkAuthStatus(), 1000);
+                        setTimeout(() => this.checkAuthStatus(), 2000);
                     }
                 }, 1000);
                 
@@ -178,6 +236,11 @@ class StravaManager {
         
         try {
             const response = await fetch(`/strava/status?session_id=${this.sessionId}`);
+            
+            if (!response.ok) {
+                throw new Error(`HTTP ${response.status}`);
+            }
+            
             const data = await response.json();
             
             if (data.authenticated && data.token_valid) {
@@ -220,6 +283,11 @@ class StravaManager {
     async processCallback(code) {
         try {
             const response = await fetch(`/strava/callback?code=${code}`);
+            
+            if (!response.ok) {
+                throw new Error(`HTTP ${response.status}`);
+            }
+            
             const data = await response.json();
             
             if (data.success) {
@@ -231,9 +299,11 @@ class StravaManager {
                     this.isAuthenticated = true;
                     this.showState('connected');
                     notify.success(t('notification_strava_connected'), t('strava_connected_success'));
+                } else {
+                    throw new Error('Session ID not found in response');
                 }
             } else {
-                this.showError(data.message);
+                this.showError(data.message || 'Authentication failed');
             }
         } catch (error) {
             console.error('Erro no callback Strava:', error);
@@ -260,17 +330,24 @@ class StravaManager {
         
         try {
             const response = await fetch(`/strava/activities?session_id=${this.sessionId}&per_page=20`);
+            
+            if (!response.ok) {
+                throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+            }
+            
             const data = await response.json();
             
             if (data.success && data.activities) {
                 this.activities = data.activities;
                 this.renderActivities();
+                notify.success(t('notification_strava_activity'), 
+                    t('strava_activities_loaded', { count: data.activities.length }));
             } else {
                 this.showError(data.error || t('strava_activities_error'));
             }
         } catch (error) {
             console.error('Erro ao carregar atividades:', error);
-            this.showError(t('strava_network_error'));
+            this.showError(`${t('strava_network_error')}: ${error.message}`);
         }
     }
     
@@ -290,13 +367,13 @@ class StravaManager {
             <div class="activity-item" data-activity-id="${activity.id}">
                 <div class="activity-header">
                     <div class="activity-icon">
-                        ${this.getActivityIcon(activity.sport_type)}
+                        ${this.getActivityIcon(activity.type)}
                     </div>
                     <div class="activity-info">
                         <h5 class="activity-name">${this.escapeHtml(activity.name)}</h5>
                         <div class="activity-meta">
-                            <span class="activity-sport">${activity.sport_type}</span>
-                            <span class="activity-date">${this.formatDate(activity.start_date_local)}</span>
+                            <span class="activity-sport">${activity.type}</span>
+                            <span class="activity-date">${this.formatDate(activity.start_date)}</span>
                         </div>
                     </div>
                 </div>
@@ -311,7 +388,7 @@ class StravaManager {
                     </div>
                     <div class="stat">
                         <span class="stat-label" data-i18n="elevation">Elevação:</span>
-                        <span class="stat-value">${activity.total_elevation_gain.toFixed(0)} m</span>
+                        <span class="stat-value">${(activity.total_elevation_gain || 0).toFixed(0)} m</span>
                     </div>
                 </div>
                 <div class="activity-actions">
@@ -330,6 +407,7 @@ class StravaManager {
         // Adicionar event listeners aos botões
         container.querySelectorAll('.activity-select-btn').forEach(btn => {
             btn.addEventListener('click', (e) => {
+                e.stopPropagation();
                 const activityId = e.currentTarget.dataset.activityId;
                 this.selectActivity(activityId);
             });
@@ -355,29 +433,31 @@ class StravaManager {
                 body: JSON.stringify({ format })
             });
             
+            if (!response.ok) {
+                const errorText = await response.text();
+                throw new Error(`HTTP ${response.status}: ${errorText}`);
+            }
+            
             const data = await response.json();
             
-            if (response.ok) {
-                this.selectedActivity = this.activities.find(a => a.id == activityId);
-                
-                // Simular o carregamento de arquivo GPX para o sistema existente
-                this.simulateGpxUpload(data, format);
-                
-                notify.success(t('notification_strava_activity'), 
-                    t('strava_activity_imported', { name: this.selectedActivity.name }));
-                
-                // Marcar atividade como selecionada
-                document.querySelectorAll('.activity-item').forEach(item => {
-                    item.classList.remove('selected');
-                });
-                document.querySelector(`[data-activity-id="${activityId}"]`).classList.add('selected');
-                
-            } else {
-                notify.error(t('notification_error'), data.message || t('strava_download_error'));
-            }
+            this.selectedActivity = this.activities.find(a => a.id == activityId);
+            
+            // Simular o carregamento de arquivo GPX para o sistema existente
+            this.simulateGpxUpload(data, format);
+            
+            notify.success(t('notification_strava_activity'), 
+                t('strava_activity_imported', { name: this.selectedActivity.name }));
+            
+            // Marcar atividade como selecionada
+            document.querySelectorAll('.activity-item').forEach(item => {
+                item.classList.remove('selected');
+            });
+            document.querySelector(`[data-activity-id="${activityId}"]`).classList.add('selected');
+            
         } catch (error) {
             console.error('Erro ao baixar atividade:', error);
-            notify.error(t('notification_error'), t('strava_network_error'));
+            notify.error(t('notification_error'), 
+                `${t('strava_download_error')}: ${error.message}`);
         } finally {
             // Restaurar botão
             btn.innerHTML = originalText;
@@ -405,7 +485,7 @@ class StravaManager {
         if (data.extra_data) {
             let infoHtml = `<h4>📈 ${t('strava_activity_imported_title')}</h4>`;
             infoHtml += `<p><strong>${this.selectedActivity.name}</strong></p>`;
-            infoHtml += `<p>${t('strava_sport_detected', { sport: this.selectedActivity.sport_type })}</p>`;
+            infoHtml += `<p>${t('strava_sport_detected', { sport: this.selectedActivity.type })}</p>`;
             
             const stats = [];
             if (data.extra_data.total_calories > 0) {
@@ -476,6 +556,7 @@ class StravaManager {
             'Walk': '🚶',
             'Hike': '🥾',
             'Swim': '🏊',
+            'VirtualRide': '🚴‍♂️',
             'default': '🏃'
         };
         return icons[sportType] || icons.default;

@@ -6,6 +6,8 @@ mod utils;
 mod tcx_adapter;
 mod fit_adapter;
 mod strava_integration;
+use chrono::{DateTime, Utc};
+use gpx::Waypoint;
 
 use axum::{
     extract::{DefaultBodyLimit, Multipart, Query, Path},
@@ -732,3 +734,255 @@ async fn suggest_sync_point(mut multipart: Multipart) -> Response {
     let _ = tokio::fs::remove_dir_all(&upload_dir).await;
     result.into_response()
 }
+
+fn debug_coordinates(gpx: &gpx::Gpx, logs: &mut Vec<String>) {
+    let mut total_points = 0;
+    let mut valid_points = 0;
+    let mut lat_sum = 0.0;
+    let mut lon_sum = 0.0;
+    let mut lat_min = f64::INFINITY;
+    let mut lat_max = f64::NEG_INFINITY;
+    let mut lon_min = f64::INFINITY;
+    let mut lon_max = f64::NEG_INFINITY;
+
+    for track in &gpx.tracks {
+        for segment in &track.segments {
+            for point in &segment.points {
+                total_points += 1;
+                
+                let lat = point.point().y();
+                let lon = point.point().x();
+                
+                // Verificar se as coordenadas são válidas
+                if lat >= -90.0 && lat <= 90.0 && lon >= -180.0 && lon <= 180.0 && 
+                   lat != 0.0 && lon != 0.0 { // Excluir pontos (0,0) que são suspeitos
+                    valid_points += 1;
+                    lat_sum += lat;
+                    lon_sum += lon;
+                    
+                    lat_min = lat_min.min(lat);
+                    lat_max = lat_max.max(lat);
+                    lon_min = lon_min.min(lon);
+                    lon_max = lon_max.max(lon);
+                }
+            }
+        }
+    }
+
+    logs.push(format!("📍 DEBUG COORDENADAS:"));
+    logs.push(format!("   Total de pontos: {}", total_points));
+    logs.push(format!("   Pontos válidos: {}", valid_points));
+    
+    if valid_points > 0 {
+        let avg_lat = lat_sum / valid_points as f64;
+        let avg_lon = lon_sum / valid_points as f64;
+        
+        logs.push(format!("   Centro aproximado: {:.6}, {:.6}", avg_lat, avg_lon));
+        logs.push(format!("   Range Latitude: {:.6} a {:.6}", lat_min, lat_max));
+        logs.push(format!("   Range Longitude: {:.6} a {:.6}", lon_min, lon_max));
+        
+        // Detectar possíveis problemas
+        if (lat_max - lat_min) > 10.0 {
+            logs.push("   ⚠️ ALERTA: Range de latitude muito grande (>10°)".to_string());
+        }
+        
+        if (lon_max - lon_min) > 10.0 {
+            logs.push("   ⚠️ ALERTA: Range de longitude muito grande (>10°)".to_string());
+        }
+        
+        // Tentar identificar região geográfica
+        let region = identify_region(avg_lat, avg_lon);
+        logs.push(format!("   📍 Região detectada: {}", region));
+    } else {
+        logs.push("   ❌ ERRO: Nenhuma coordenada válida encontrada!".to_string());
+    }
+}
+
+fn identify_region(lat: f64, lon: f64) -> String {
+    // Identificar região geográfica aproximada
+    if lat >= -35.0 && lat <= 5.0 && lon >= -75.0 && lon <= -30.0 {
+        "Brasil".to_string()
+    } else if lat >= 24.0 && lat <= 49.0 && lon >= -125.0 && lon <= -66.0 {
+        "Estados Unidos".to_string()
+    } else if lat >= 35.0 && lat <= 71.0 && lon >= -10.0 && lon <= 40.0 {
+        "Europa".to_string()
+    } else if lat >= 0.0 && lat <= 0.0 && lon >= 0.0 && lon <= 0.0 {
+        "Coordenadas (0,0) - ERRO SUSPEITO".to_string()
+    } else {
+        format!("Região desconhecida (lat: {:.2}, lon: {:.2})", lat, lon)
+    }
+}
+
+// Modificar a função suggest_sync_point para incluir debug
+// async fn suggest_sync_point(mut multipart: Multipart) -> Response {
+//     let mut track_file_path: Option<PathBuf> = None;
+//     let mut video_path: Option<PathBuf> = None;
+//     let mut interpolation_level: i64 = 1;
+
+//     let upload_dir = PathBuf::from("uploads_temp_suggest");
+//     tokio::fs::create_dir_all(&upload_dir).await.unwrap();
+
+//     while let Some(field) = multipart.next_field().await.unwrap() {
+//         let name = field.name().unwrap_or("").to_string();
+        
+//         if let Some(file_name_str) = field.file_name().map(|s| s.to_string()) {
+//             let data = field.bytes().await.unwrap();
+//             let unique_id = Uuid::new_v4();
+//             let path = upload_dir.join(format!("{}-{}", unique_id, file_name_str));
+//             tokio::fs::write(&path, &data).await.unwrap();
+            
+//             if name == "gpxFile" { track_file_path = Some(path); }
+//             else if name == "videoFile" { video_path = Some(path); }
+//         } else {
+//             let data = field.bytes().await.unwrap();
+//             if let Ok(value) = String::from_utf8(data.to_vec()) {
+//                 if name == "interpolationLevel" {
+//                     interpolation_level = value.parse().unwrap_or(1);
+//                 }
+//             }
+//         }
+//     }
+
+//     let result = if let (Some(track_p), Some(video_p)) = (track_file_path, video_path) {
+//         match utils::get_video_time_range(&video_p, "en") {
+//             Ok((video_start_time, _)) => {
+//                 match read_track_file(&track_p) {
+//                     Ok(track_file_data) => {
+//                         let file_type = track_p.extension().and_then(|s| s.to_str()).unwrap_or("").to_uppercase();
+                        
+//                         // DEBUG: Verificar coordenadas antes da interpolação
+//                         let mut debug_logs = Vec::new();
+//                         debug_coordinates(&track_file_data.gpx, &mut debug_logs);
+//                         tracing::debug!("Coordenadas debugadas:\n{}", debug_logs.join("\n"));
+                        
+//                         let interpolated_gpx = utils::interpolate_gpx_points(track_file_data.gpx, interpolation_level);
+                        
+//                         // DEBUG: Verificar coordenadas após interpolação
+//                         debug_coordinates(&interpolated_gpx, &mut debug_logs);
+//                         tracing::debug!("Coordenadas após interpolação:\n{}", debug_logs.join("\n"));
+                        
+//                         let first_point_after = interpolated_gpx
+//                             .tracks.iter().flat_map(|t| t.segments.iter()).flat_map(|s| s.points.iter())
+//                             .find(|p| {
+//                                 if let Some(time) = p.time.as_ref().and_then(|t| t.format().ok()) {
+//                                     if let Ok(parsed_time) = time.parse::<DateTime<Utc>>() {
+//                                         return parsed_time > video_start_time;
+//                                     }
+//                                 }
+//                                 false
+//                             });
+
+//                         let (extra_data_json, sport_type) = if let Some(tcx_extra) = track_file_data.extra_data {
+//                             let json = TcxExtraDataJson {
+//                                 total_time_seconds: tcx_extra.total_time_seconds,
+//                                 total_distance_meters: tcx_extra.total_distance_meters,
+//                                 total_calories: tcx_extra.total_calories,
+//                                 max_speed: tcx_extra.max_speed,
+//                                 average_heart_rate: tcx_extra.average_heart_rate(),
+//                                 max_heart_rate: tcx_extra.max_heart_rate(),
+//                                 average_cadence: tcx_extra.average_cadence(),
+//                                 max_cadence: tcx_extra.max_cadence(),
+//                                 average_speed: tcx_extra.average_speed(),
+//                             };
+//                             (Some(json), tcx_extra.sport)
+//                         } else {
+//                             (None, None)
+//                         };
+
+//                         let points_for_json: Vec<PointJson> = interpolated_gpx.tracks.iter()
+//                             .flat_map(|t| t.segments.iter())
+//                             .flat_map(|s| s.points.iter())
+//                             .map(|p| {
+//                                 let (heart_rate, cadence, speed) = processing::extract_telemetry_from_waypoint(p);
+                                
+//                                 // IMPORTANTE: Garantir ordem correta das coordenadas
+//                                 let lat = p.point().y(); // Latitude (Y)
+//                                 let lon = p.point().x(); // Longitude (X)
+                                
+//                                 // Validar coordenadas antes de enviar
+//                                 if lat < -90.0 || lat > 90.0 || lon < -180.0 || lon > 180.0 {
+//                                     tracing::warn!("Coordenada inválida detectada: lat={}, lon={}", lat, lon);
+//                                 }
+                                
+//                                 PointJson {
+//                                     lat, // Latitude
+//                                     lon, // Longitude  
+//                                     time: p.time.as_ref().and_then(|t| t.format().ok()).map(|t| t.to_string()),
+//                                     heart_rate,
+//                                     cadence,
+//                                     speed,
+//                                 }
+//                             })
+//                             .collect();
+
+//                         tracing::info!("Enviando {} pontos para o frontend", points_for_json.len());
+                        
+//                         if let Some(point) = first_point_after {
+//                             let point_coords = point.point();
+//                             let lat = point_coords.y(); // Latitude
+//                             let lon = point_coords.x(); // Longitude
+                            
+//                             tracing::info!("Ponto de sincronização sugerido: lat={}, lon={}", lat, lon);
+                            
+//                             let timestamp_iso_str = point.time.as_ref().and_then(|t| t.format().ok()).unwrap_or_default();
+
+//                             let display_timestamp_str = if let Ok(utc_time) = timestamp_iso_str.parse::<DateTime<Utc>>() {
+//                                 let brt_offset = chrono::FixedOffset::west_opt(3 * 3600).unwrap();
+//                                 let local_time = utc_time.with_timezone(&brt_offset);
+//                                 format!("{} (-03:00)", local_time.format("%d/%m/%Y, %H:%M:%S"))
+//                             } else {
+//                                 timestamp_iso_str.clone()
+//                             };
+
+//                             (StatusCode::OK, Json(SuggestionResponse {
+//                                 message: "Sync point suggested.".to_string(),
+//                                 latitude: Some(lat), // Latitude
+//                                 longitude: Some(lon), // Longitude
+//                                 timestamp: Some(timestamp_iso_str),
+//                                 display_timestamp: Some(display_timestamp_str),
+//                                 interpolated_points: Some(points_for_json),
+//                                 file_type: Some(file_type),
+//                                 sport_type,
+//                                 extra_data: extra_data_json,
+//                             }))
+//                         } else {
+//                             (StatusCode::OK, Json(SuggestionResponse { 
+//                                 message: "No track point found after video start.".to_string(), 
+//                                 latitude: None, longitude: None, timestamp: None, display_timestamp: None,
+//                                 interpolated_points: Some(points_for_json),
+//                                 file_type: Some(file_type),
+//                                 sport_type,
+//                                 extra_data: extra_data_json,
+//                             }))
+//                         }
+//                     },
+//                     Err(e) => {
+//                         tracing::error!("Erro ao ler arquivo de trilha: {}", e);
+//                         (StatusCode::INTERNAL_SERVER_ERROR, Json(SuggestionResponse { 
+//                             message: format!("Error reading track file: {}", e), 
+//                             latitude: None, longitude: None, timestamp: None, display_timestamp: None,
+//                             interpolated_points: None, file_type: None, sport_type: None, extra_data: None,
+//                         }))
+//                     }
+//                 }
+//             },
+//             Err(e) => {
+//                 tracing::error!("Erro ao ler metadados do vídeo: {}", e);
+//                 (StatusCode::INTERNAL_SERVER_ERROR, Json(SuggestionResponse { 
+//                     message: format!("Error reading video metadata: {}", e), 
+//                     latitude: None, longitude: None, timestamp: None, display_timestamp: None,
+//                     interpolated_points: None, file_type: None, sport_type: None, extra_data: None,
+//                 }))
+//             }
+//         }
+//     } else {
+//         (StatusCode::BAD_REQUEST, Json(SuggestionResponse { 
+//             message: "Missing video or track file.".to_string(), 
+//             latitude: None, longitude: None, timestamp: None, display_timestamp: None,
+//             interpolated_points: None, file_type: None, sport_type: None, extra_data: None,
+//         }))
+//     };
+    
+//     let _ = tokio::fs::remove_dir_all(&upload_dir).await;
+//     result.into_response()
+// }

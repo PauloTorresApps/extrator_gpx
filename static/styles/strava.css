@@ -1,18 +1,95 @@
-/* === INTEGRAÇÃO STRAVA === */
+/* === INTEGRAÇÃO STRAVA - LAYOUT COMPACTO === */
 .strava-integration {
     background: linear-gradient(135deg, rgba(252, 76, 2, 0.1) 0%, rgba(252, 76, 2, 0.05) 100%);
     border: 1px solid rgba(252, 76, 2, 0.3);
     border-radius: 12px;
-    padding: 1.5rem;
+    padding: 1rem;
     margin-bottom: 1rem;
+    transition: all 0.3s ease;
+}
+
+.strava-integration.collapsed {
+    padding: 0.75rem 1rem;
+    margin-bottom: 0.5rem;
 }
 
 .strava-integration .file-group-label {
     color: #fc4c02;
     display: flex;
     align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem;
+    margin-bottom: 0;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    padding: 0.5rem 0;
+}
+
+.strava-integration.collapsed .file-group-label {
+    margin-bottom: 0;
+}
+
+.strava-toggle {
+    user-select: none;
+}
+
+.strava-toggle:hover {
+    color: #e04002;
+}
+
+.expand-indicator {
+    font-size: 0.8rem;
+    color: #fc4c02;
+    font-weight: bold;
+    transition: transform 0.3s ease;
+}
+
+.strava-integration:not(.collapsed) .expand-indicator {
+    transform: rotate(180deg);
+}
+
+.strava-content {
+    transition: all 0.3s ease;
+    overflow: hidden;
+}
+
+.strava-content.hidden {
+    max-height: 0;
+    opacity: 0;
+    margin-top: 0;
+}
+
+.strava-content:not(.hidden) {
+    max-height: 1000px;
+    opacity: 1;
+    margin-top: 1rem;
+}
+
+.strava-status {
+    display: flex;
+    align-items: center;
     gap: 0.5rem;
     margin-bottom: 1rem;
+    padding: 0.75rem;
+    background: rgba(76, 175, 80, 0.1);
+    border: 1px solid rgba(76, 175, 80, 0.3);
+    border-radius: 6px;
+}
+
+.status-indicator {
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.8rem;
+    font-weight: bold;
+}
+
+.status-indicator.connected {
+    background: var(--success-color);
+    color: white;
 }
 
 .strava-btn {
@@ -75,7 +152,7 @@
 }
 
 .strava-info {
-    margin-top: 0.75rem;
+    margin-bottom: 1rem;
     padding: 0.75rem;
     background: rgba(0, 0, 0, 0.2);
     border-radius: 6px;
@@ -94,6 +171,7 @@
     gap: 1rem;
     align-items: center;
     margin-bottom: 1rem;
+    flex-wrap: wrap;
 }
 
 .strava-error {
@@ -127,7 +205,7 @@
     font-size: 0.9rem;
 }
 
-/* === LISTA DE ATIVIDADES === */
+/* === LISTA DE ATIVIDADES - COMPACTA === */
 .strava-activities {
     margin-top: 1rem;
     border-top: 1px solid rgba(252, 76, 2, 0.2);
@@ -144,7 +222,7 @@
 .activities-header h4 {
     color: #fc4c02;
     margin: 0;
-    font-size: 1.1rem;
+    font-size: 1rem;
 }
 
 .activities-controls select {
@@ -153,11 +231,11 @@
     color: var(--text-color);
     padding: 0.5rem;
     border-radius: 6px;
-    font-size: 0.9rem;
+    font-size: 0.85rem;
 }
 
 .activities-container {
-    max-height: 400px;
+    max-height: 350px; /* Reduzido para ser menos intrusivo */
     overflow-y: auto;
     border: 1px solid rgba(252, 76, 2, 0.2);
     border-radius: 8px;
@@ -169,13 +247,13 @@
     align-items: center;
     justify-content: center;
     gap: 0.75rem;
-    padding: 2rem;
+    padding: 1.5rem;
     color: #aaa;
 }
 
 .loading-spinner-small {
-    width: 20px;
-    height: 20px;
+    width: 16px;
+    height: 16px;
     border: 2px solid rgba(252, 76, 2, 0.2);
     border-top: 2px solid #fc4c02;
     border-radius: 50%;
@@ -184,15 +262,17 @@
 
 .no-activities {
     text-align: center;
-    padding: 2rem;
+    padding: 1.5rem;
     color: #aaa;
+    font-size: 0.9rem;
 }
 
 .activity-item {
     border-bottom: 1px solid rgba(68, 68, 68, 0.3);
-    padding: 1rem;
+    padding: 0.75rem;
     transition: all 0.3s ease;
     position: relative;
+    font-size: 0.9rem;
 }
 
 .activity-item:last-child {
@@ -205,37 +285,37 @@
 
 .activity-item.selected {
     background: rgba(252, 76, 2, 0.1);
-    border-left: 4px solid #fc4c02;
+    border-left: 3px solid #fc4c02;
 }
 
 .activity-item.selected::after {
     content: '✓';
     position: absolute;
-    top: 1rem;
-    right: 1rem;
+    top: 0.75rem;
+    right: 0.75rem;
     background: var(--success-color);
     color: white;
-    width: 24px;
-    height: 24px;
+    width: 20px;
+    height: 20px;
     border-radius: 50%;
     display: flex;
     align-items: center;
     justify-content: center;
-    font-size: 0.8rem;
+    font-size: 0.7rem;
     font-weight: bold;
 }
 
 .activity-header {
     display: flex;
     align-items: flex-start;
-    gap: 0.75rem;
-    margin-bottom: 0.75rem;
+    gap: 0.6rem;
+    margin-bottom: 0.6rem;
 }
 
 .activity-icon {
-    font-size: 1.5rem;
+    font-size: 1.2rem;
     flex-shrink: 0;
-    width: 40px;
+    width: 30px;
     text-align: center;
 }
 
@@ -245,9 +325,9 @@
 }
 
 .activity-name {
-    margin: 0 0 0.25rem 0;
+    margin: 0 0 0.2rem 0;
     color: var(--text-color);
-    font-size: 1rem;
+    font-size: 0.95rem;
     font-weight: 600;
     white-space: nowrap;
     overflow: hidden;
@@ -256,25 +336,27 @@
 
 .activity-meta {
     display: flex;
-    gap: 1rem;
+    gap: 0.75rem;
     color: #aaa;
-    font-size: 0.85rem;
+    font-size: 0.8rem;
+    flex-wrap: wrap;
 }
 
 .activity-sport {
     background: rgba(252, 76, 2, 0.2);
     color: #fc4c02;
-    padding: 0.2rem 0.5rem;
-    border-radius: 4px;
+    padding: 0.15rem 0.4rem;
+    border-radius: 3px;
     font-weight: 500;
+    font-size: 0.75rem;
 }
 
 .activity-stats {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(100px, 1fr));
-    gap: 0.75rem;
-    margin-bottom: 0.75rem;
-    padding: 0.75rem;
+    grid-template-columns: repeat(auto-fit, minmax(80px, 1fr));
+    gap: 0.5rem;
+    margin-bottom: 0.6rem;
+    padding: 0.5rem;
     background: rgba(0, 0, 0, 0.2);
     border-radius: 6px;
 }
@@ -285,16 +367,16 @@
 
 .stat-label {
     display: block;
-    font-size: 0.75rem;
+    font-size: 0.7rem;
     color: #aaa;
-    margin-bottom: 0.25rem;
+    margin-bottom: 0.2rem;
     text-transform: uppercase;
-    letter-spacing: 0.5px;
+    letter-spacing: 0.3px;
 }
 
 .stat-value {
     display: block;
-    font-size: 0.9rem;
+    font-size: 0.85rem;
     font-weight: 600;
     color: var(--text-color);
 }
@@ -308,21 +390,21 @@
 .activity-select-btn {
     display: flex;
     align-items: center;
-    gap: 0.5rem;
+    gap: 0.4rem;
     background: linear-gradient(135deg, var(--primary-color), #a374e8);
     color: white;
     border: none;
-    padding: 0.5rem 1rem;
+    padding: 0.4rem 0.8rem;
     border-radius: 6px;
     cursor: pointer;
-    font-size: 0.85rem;
+    font-size: 0.8rem;
     font-weight: 500;
     transition: all 0.3s ease;
 }
 
 .activity-select-btn:hover:not(:disabled) {
     transform: translateY(-1px);
-    box-shadow: 0 4px 12px rgba(187, 134, 252, 0.3);
+    box-shadow: 0 3px 10px rgba(187, 134, 252, 0.3);
 }
 
 .activity-select-btn:disabled {
@@ -331,32 +413,37 @@
     transform: none !important;
 }
 
-/* === RESPONSIVE === */
+/* === RESPONSIVE MELHORADO === */
 @media (max-width: 768px) {
     .strava-integration {
-        padding: 1rem;
+        padding: 0.75rem;
         margin-bottom: 0.75rem;
+    }
+    
+    .strava-integration.collapsed {
+        padding: 0.5rem 0.75rem;
     }
     
     .strava-controls {
         flex-direction: column;
         align-items: stretch;
-        gap: 0.75rem;
+        gap: 0.5rem;
     }
     
     .activities-header {
         flex-direction: column;
-        gap: 0.75rem;
+        gap: 0.5rem;
         align-items: stretch;
     }
     
     .activities-container {
-        max-height: 300px;
+        max-height: 250px;
     }
     
     .activity-header {
         flex-direction: column;
-        gap: 0.5rem;
+        gap: 0.4rem;
+        align-items: flex-start;
     }
     
     .activity-icon {
@@ -366,13 +453,13 @@
     
     .activity-meta {
         flex-direction: column;
-        gap: 0.5rem;
+        gap: 0.3rem;
     }
     
     .activity-stats {
         grid-template-columns: repeat(2, 1fr);
-        gap: 0.5rem;
-        padding: 0.5rem;
+        gap: 0.4rem;
+        padding: 0.4rem;
     }
     
     .stat {
@@ -386,13 +473,25 @@
     .activity-select-btn {
         width: 100%;
         justify-content: center;
+        padding: 0.5rem;
     }
     
     .activity-item.selected::after {
         top: 0.5rem;
         right: 0.5rem;
-        width: 20px;
-        height: 20px;
-        font-size: 0.7rem;
+        width: 18px;
+        height: 18px;
+        font-size: 0.65rem;
     }
+}
+
+/* === ANIMAÇÕES === */
+@keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateY(10px); }
+    to { opacity: 1; transform: translateY(0); }
 }
