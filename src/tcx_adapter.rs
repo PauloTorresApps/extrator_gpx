@@ -5,7 +5,7 @@ use std::fs::File;
 use std::io::BufReader;
 use std::path::Path;
 use xml::reader::{EventReader, XmlEvent};
-use std::time::SystemTime;
+use time::OffsetDateTime;
 
 #[derive(Debug, Clone, Default)]
 pub struct TcxExtraData {
@@ -54,9 +54,10 @@ pub fn read_and_process_tcx(path: &Path) -> Result<TcxProcessResult, Box<dyn std
     
     let mut in_trackpoint = false;
     let mut current_tag = String::new();
-    let mut current_point = Waypoint::new(geo_types::Point::new(0.0, 0.0));
     let mut lat = 0.0;
     let mut lon = 0.0;
+    let mut current_time: Option<gpx::Time> = None;
+    let mut current_elevation: Option<f64> = None;
     
     for e in parser {
         match e {
@@ -69,14 +70,19 @@ pub fn read_and_process_tcx(path: &Path) -> Result<TcxProcessResult, Box<dyn std
                 }
                 if current_tag == "Trackpoint" {
                     in_trackpoint = true;
-                    current_point = Waypoint::new(geo_types::Point::new(0.0, 0.0));
+                    lat = 0.0;
+                    lon = 0.0;
+                    current_time = None;
+                    current_elevation = None;
                 }
             }
             Ok(XmlEvent::EndElement { name }) => {
                 if name.local_name == "Trackpoint" {
                     in_trackpoint = false;
-                    current_point.point = geo_types::Point::new(lon, lat);
-                    track_segment.points.push(current_point.clone());
+                    let mut new_point = Waypoint::new(geo_types::Point::new(lon, lat));
+                    new_point.time = current_time;
+                    new_point.elevation = current_elevation;
+                    track_segment.points.push(new_point);
                 }
                 current_tag.clear();
             }
@@ -84,12 +90,14 @@ pub fn read_and_process_tcx(path: &Path) -> Result<TcxProcessResult, Box<dyn std
                 match current_tag.as_str() {
                     "Time" if in_trackpoint => {
                         if let Ok(time) = chrono::DateTime::parse_from_rfc3339(&text) {
-                            current_point.time = Some(SystemTime::from(time).into());
+                            if let Ok(offset_dt) = OffsetDateTime::from_unix_timestamp(time.timestamp()) {
+                                current_time = Some(gpx::Time::from(offset_dt));
+                            }
                         }
                     },
                     "LatitudeDegrees" if in_trackpoint => lat = text.parse().unwrap_or(0.0),
                     "LongitudeDegrees" if in_trackpoint => lon = text.parse().unwrap_or(0.0),
-                    "AltitudeMeters" if in_trackpoint => current_point.elevation = text.parse().ok(),
+                    "AltitudeMeters" if in_trackpoint => current_elevation = text.parse().ok(),
                     "Value" if in_trackpoint => {
                         if let Ok(hr) = text.parse::<f64>() {
                             extra_data.heart_rates.push(hr);

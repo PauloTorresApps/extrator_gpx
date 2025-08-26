@@ -4,23 +4,29 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-axum = { version = "0.7.5", features = ["macros"] }
+axum = { version = "0.7.5", features = ["macros", "multipart"] }
 tokio = { version = "1", features = ["full"] }
 gpx = "0.10.0"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 chrono = { version = "0.4", features = ["serde"] }
+chrono-tz = "0.8"
 ffmpeg-next = "7.0"
-plotters = "0.3.5"
+plotters = "0.3.7"
 lazy_static = "1.4.0"
 uuid = { version = "1.4.1", features = ["v4"] }
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 tower-http = { version = "0.5.2", features = ["fs"] }
-image = "0.24.7"
+image = "0.24.9"
+imageproc = "0.23.0"
+rusttype = "0.9.3"
 reqwest = { version = "0.11", features = ["json"] }
 dotenv = "0.15.0"
-fitparser = "0.10.0"
+# Removida temporariamente até resolver problemas de compatibilidade
+# fitparser = "0.10.0"
 bytes = "1.6.0"
 xml-rs = "0.8"
 geo-types = "0.7.10"
+time = { version = "0.3", features = ["macros", "parsing", "formatting"] }
+ffprobe = "0.4"

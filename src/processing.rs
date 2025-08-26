@@ -143,7 +143,7 @@ fn process_internal(
     let (video_start_time, video_end_time) = get_video_time_range(&video_path, lang)?;
     logs.push(format!("{} {}", t("video_start_time", lang), video_start_time));
     
-    let selected_gpx_time = sync_timestamp_str.parse::<DateTime<Utc>>()?;
+    let selected_gpx_time = sync_timestamp_str.parse::<chrono::DateTime<chrono::Utc>>()?;
     logs.push(format!("{} {}", t("sync_point_selected", lang), selected_gpx_time));
     
     let time_offset = selected_gpx_time - video_start_time;
@@ -151,7 +151,9 @@ fn process_internal(
 
     logs.push(format!("{} {:?}", t("reading_gpx", lang), track_file_path));
     
-    let track_file_data = crate::read_track_file(&track_file_path)?;
+    // Correção: converter erro para tipo compatível
+    let track_file_data = crate::read_track_file(&track_file_path)
+        .map_err(|e| -> Box<dyn Error> { format!("Erro ao ler arquivo de trilha: {}", e).into() })?;
     let is_tcx_file = track_file_data.extra_data.is_some();
     logs.push(t("gpx_read_success", lang));
     
@@ -188,89 +190,92 @@ fn process_internal(
 
                 for i in 1..segment_points.len() - 1 {
                     let p2 = &segment_points[i];
-                    if let Some(time_str) = p2.time.as_ref().and_then(|t| t.format().ok()) {
-                        if let Ok(point_time) = time_str.parse::<DateTime<Utc>>() {
-                            let adjusted_point_time = point_time - time_offset;
+                    
+                    if let Some(time) = p2.time.as_ref() {
+                        if let Ok(time_str) = time.format() {
+                            if let Ok(point_time) = time_str.parse::<DateTime<Utc>>() {
+                                let adjusted_point_time = point_time - time_offset;
 
-                            if adjusted_point_time >= video_start_time && adjusted_point_time <= video_end_time {
-                                let mut speedo_output_path = String::new();
-                                let mut stats_output_path: Option<String> = None;
-                                
-                                // Extrai dados de telemetria uma vez para reutilização
-                                let (current_hr, current_cad, current_spd) = extract_telemetry_from_waypoint(p2);
+                                if adjusted_point_time >= video_start_time && adjusted_point_time <= video_end_time {
+                                    let mut speedo_output_path = String::new();
+                                    let mut stats_output_path: Option<String> = None;
+                                    
+                                    // Extrai dados de telemetria uma vez para reutilização
+                                    let (current_hr, current_cad, current_spd) = extract_telemetry_from_waypoint(p2);
 
-                                if add_speedo_overlay {
-                                    let p1 = &segment_points[i - 1];
-                                    let p3 = &segment_points[i + 1];
+                                    if add_speedo_overlay {
+                                        let p1 = &segment_points[i - 1];
+                                        let p3 = &segment_points[i + 1];
 
-                                    // --- MELHORIA: Unifica a fonte de velocidade ---
-                                    let speed_kmh = if is_tcx_file && current_spd.is_some() {
-                                        current_spd.unwrap() // Usa a velocidade do sensor TCX se disponível
-                                    } else {
-                                        calculate_speed_kmh(p1, p2).unwrap_or(0.0) // Senão, calcula a partir do GPS
-                                    };
-                                    // --- FIM DA MELHORIA ---
+                                        // --- MELHORIA: Unifica a fonte de velocidade ---
+                                        let speed_kmh = if is_tcx_file && current_spd.is_some() {
+                                            current_spd.unwrap() // Usa a velocidade do sensor TCX se disponível
+                                        } else {
+                                            calculate_speed_kmh(p1, p2).unwrap_or(0.0) // Senão, calcula a partir do GPS
+                                        };
+                                        // --- FIM DA MELHORIA ---
 
-                                    let g_force = calculate_g_force(p1, p2, p3).unwrap_or(0.0);
-                                    let bearing = calculate_bearing(p1, p2);
-                                    let elevation = p2.elevation.unwrap_or(0.0);
-                                    speedo_output_path = format!("{}/frame_{:05}.png", output_dir, frame_counter);
-                                    generate_speedometer_image(speed_kmh, bearing, g_force, elevation, &speedo_output_path, lang, None)?;
-                                    frame_counter += 1;
-                                }
+                                        let g_force = calculate_g_force(p1, p2, p3).unwrap_or(0.0);
+                                        let bearing = calculate_bearing(p1, p2);
+                                        let elevation = p2.elevation.unwrap_or(0.0);
+                                        speedo_output_path = format!("{}/frame_{:05}.png", output_dir, frame_counter);
+                                        generate_speedometer_image(speed_kmh, bearing, g_force, elevation, &speedo_output_path, lang, None)?;
+                                        frame_counter += 1;
+                                    }
 
-                                if add_stats_overlay {
-                                    if let Some(last_p) = last_video_point {
-                                        video_distance_m += crate::utils::distance_2d(last_p, p2);
-                                        
-                                        if let (Some(last_elev), Some(curr_elev)) = (last_p.elevation, p2.elevation) {
-                                            if curr_elev > last_elev {
-                                                video_elevation_gain_m += curr_elev - last_elev;
+                                    if add_stats_overlay {
+                                        if let Some(last_p) = last_video_point {
+                                            video_distance_m += crate::utils::distance_2d(last_p, p2);
+                                            
+                                            if let (Some(last_elev), Some(curr_elev)) = (last_p.elevation, p2.elevation) {
+                                                if curr_elev > last_elev {
+                                                    video_elevation_gain_m += curr_elev - last_elev;
+                                                }
                                             }
                                         }
-                                    }
-                                    last_video_point = Some(p2);
+                                        last_video_point = Some(p2);
 
-                                    let distance_km = video_distance_m / 1000.0;
-                                    let altitude_m = p2.elevation.unwrap_or(0.0);
-                                    
-                                    let (mut heart_rate, mut cadence, mut speed_tcx) = (None, None, None);
-                                    if is_tcx_file {
-                                        if current_hr.is_some() { last_known_hr = current_hr; }
-                                        if current_cad.is_some() { last_known_cadence = current_cad; }
-                                        if current_spd.is_some() { last_known_speed = current_spd; }
+                                        let distance_km = video_distance_m / 1000.0;
+                                        let altitude_m = p2.elevation.unwrap_or(0.0);
                                         
-                                        heart_rate = last_known_hr;
-                                        cadence = last_known_cadence;
-                                        speed_tcx = last_known_speed;
+                                        let (mut heart_rate, mut cadence, mut speed_tcx) = (None, None, None);
+                                        if is_tcx_file {
+                                            if current_hr.is_some() { last_known_hr = current_hr; }
+                                            if current_cad.is_some() { last_known_cadence = current_cad; }
+                                            if current_spd.is_some() { last_known_speed = current_spd; }
+                                            
+                                            heart_rate = last_known_hr;
+                                            cadence = last_known_cadence;
+                                            speed_tcx = last_known_speed;
+                                        }
+                                        
+                                        let stats_path = format!("{}/stats_frame_{:05}.png", stats_output_dir, stats_frame_counter);
+                                        
+                                        generate_stats_image(
+                                            distance_km, 
+                                            altitude_m, 
+                                            video_elevation_gain_m, 
+                                            point_time, 
+                                            &stats_path, 
+                                            lang,
+                                            heart_rate,
+                                            cadence,
+                                            speed_tcx,
+                                            None,
+                                            -3 * 3600,
+                                        )?;
+                                        stats_output_path = Some(stats_path);
+                                        stats_frame_counter += 1;
                                     }
-                                    
-                                    let stats_path = format!("{}/stats_frame_{:05}.png", stats_output_dir, stats_frame_counter);
-                                    
-                                    generate_stats_image(
-                                        distance_km, 
-                                        altitude_m, 
-                                        video_elevation_gain_m, 
-                                        point_time, 
-                                        &stats_path, 
-                                        lang,
-                                        heart_rate,
-                                        cadence,
-                                        speed_tcx,
-                                        None,
-                                        -3 * 3600,
-                                    )?;
-                                    stats_output_path = Some(stats_path);
-                                    stats_frame_counter += 1;
-                                }
 
-                                let timestamp_sec = (adjusted_point_time - video_start_time).num_milliseconds() as f64 / 1000.0;
-                                frame_infos.push(FrameInfo {
-                                    path: speedo_output_path,
-                                    timestamp_sec,
-                                    gpx_point: p2.clone(),
-                                    stats_path: stats_output_path,
-                                });
+                                    let timestamp_sec = (adjusted_point_time - video_start_time).num_milliseconds() as f64 / 1000.0;
+                                    frame_infos.push(FrameInfo {
+                                        path: speedo_output_path,
+                                        timestamp_sec,
+                                        gpx_point: p2.clone(),
+                                        stats_path: stats_output_path,
+                                    });
+                                }
                             }
                         }
                     }

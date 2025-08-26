@@ -15,7 +15,7 @@ pub fn generate_speedometer_image(
     elevation: f64,
     output_path: &str,
     lang: &str,
-    detected_max_speed: Option<f64>, // NOVO
+    detected_max_speed: Option<f64>,
 ) -> Result<(), Box<dyn Error>> {
     const SCALE_FACTOR: u32 = 4;
     const FINAL_IMG_SIZE: u32 = 300;
@@ -78,10 +78,10 @@ pub fn generate_speedometer_image(
     draw_centered_text_mut(&mut img, white, CENTER.0 + (compass_radius + 10.0 * SCALE_FACTOR as f32) as i32, CENTER.1, scale_text, &font_regular, east_label);
     draw_centered_text_mut(&mut img, white, CENTER.0 - (compass_radius + 10.0 * SCALE_FACTOR as f32) as i32, CENTER.1, scale_text, &font_regular, west_label);
 
-    let p_n = Point { x: CENTER.0, y: CENTER.1 - compass_radius as i32 };
-    let p_s = Point { x: CENTER.0, y: CENTER.1 + (15 * SCALE_FACTOR as i32) };
-    let p_e = Point { x: CENTER.0 + (15 * SCALE_FACTOR as i32), y: CENTER.1 };
-    let p_w = Point { x: CENTER.0 - (15 * SCALE_FACTOR as i32), y: CENTER.1 };
+    let p_n = Point::new(CENTER.0, CENTER.1 - compass_radius as i32);
+    let p_s = Point::new(CENTER.0, CENTER.1 + (15 * SCALE_FACTOR as i32));
+    let p_e = Point::new(CENTER.0 + (15 * SCALE_FACTOR as i32), CENTER.1);
+    let p_w = Point::new(CENTER.0 - (15 * SCALE_FACTOR as i32), CENTER.1);
     
     let rotated_n = rotate_point(p_n, CENTER, bearing_rad);
     let rotated_s = rotate_point(p_s, CENTER, bearing_rad);
@@ -134,7 +134,7 @@ pub fn generate_stats_image(
     cadence: Option<f64>,
     speed_kmh: Option<f64>,
     calories: Option<f64>,
-    timezone_offset_secs: i32, // NOVO
+    timezone_offset_secs: i32,
 ) -> Result<(), Box<dyn Error>> {
     const WIDTH: u32 = 280;
     const HEIGHT: u32 = 420; 
@@ -224,12 +224,6 @@ pub fn generate_stats_image(
     }
 
     // Horário e Data (sempre no final)
-    //let brt_offset = FixedOffset::west_opt(3 * 3600).unwrap(); // Fuso horário UTC-3 (Horário de Brasília)
-    // let local_time = current_time_utc.with_timezone(&brt_offset);
-
-    // let time_text = local_time.format("%H:%M").to_string();
-    // let date_text = local_time.format("%d/%m/%Y").to_string();
-
     let tz_offset = FixedOffset::east_opt(timezone_offset_secs)
         .unwrap_or(FixedOffset::east_opt(0).unwrap());
     let local_time = current_time_utc.with_timezone(&tz_offset);
@@ -240,14 +234,9 @@ pub fn generate_stats_image(
     draw_text_mut(&mut img, white, 10, current_y, scale_value, &font_bold, &time_text);
     draw_text_mut(&mut img, white, 10, current_y + 22, scale_sub_value, &font_bold, &date_text);
 
-
-    draw_text_mut(&mut img, white, 10, current_y, scale_value, &font_bold, &time_text);
-    draw_text_mut(&mut img, white, 10, current_y + 22, scale_sub_value, &font_bold, &date_text);
-
     img.save(output_path)?;
     Ok(())
 }
-
 
 pub fn generate_dot_image(path: &str, size: u32, color: Rgba<u8>) -> Result<(), Box<dyn Error>> {
     let mut img = RgbaImage::new(size, size);
@@ -283,10 +272,10 @@ fn draw_thick_line_segment_mut(
 
     let half_thickness = thickness / 2.0;
 
-    let p1 = Point { x: (start.0 + px * half_thickness) as i32, y: (start.1 + py * half_thickness) as i32 };
-    let p2 = Point { x: (end.0 + px * half_thickness) as i32, y: (end.1 + py * half_thickness) as i32 };
-    let p3 = Point { x: (end.0 - px * half_thickness) as i32, y: (end.1 - py * half_thickness) as i32 };
-    let p4 = Point { x: (start.0 - px * half_thickness) as i32, y: (start.1 - py * half_thickness) as i32 };
+    let p1 = Point::new((start.0 + px * half_thickness) as i32, (start.1 + py * half_thickness) as i32);
+    let p2 = Point::new((end.0 + px * half_thickness) as i32, (end.1 + py * half_thickness) as i32);
+    let p3 = Point::new((end.0 - px * half_thickness) as i32, (end.1 - py * half_thickness) as i32);
+    let p4 = Point::new((start.0 - px * half_thickness) as i32, (start.1 - py * half_thickness) as i32);
 
     draw_polygon_mut(image, &[p1, p2, p3, p4], color);
 }
@@ -323,7 +312,6 @@ fn speed_to_gradient_color(speed: f64, min_speed: f64, max_speed: f64) -> Rgba<u
 
     Rgba([r as u8, g as u8, b as u8, 255])
 }
-
 
 // FUNÇÃO MODIFICADA: `generate_track_map_image` agora usa o gradiente de cores
 pub fn generate_track_map_image(
@@ -382,8 +370,8 @@ pub fn generate_track_map_image(
     for track in &gpx.tracks {
         for segment in &track.segments {
             for pair in segment.points.windows(2) {
-                let p1 = &pair[0]; // CORRIGIDO: Emprestando o valor
-                let p2 = &pair[1]; // CORRIGIDO: Emprestando o valor
+                let p1 = &pair[0];
+                let p2 = &pair[1];
                 let (x1, y1) = get_pixel_coords(p1.point().x(), p1.point().y());
                 let (x2, y2) = get_pixel_coords(p2.point().x(), p2.point().y());
 
@@ -401,7 +389,6 @@ pub fn generate_track_map_image(
     img.save(path)?;
     Ok(())
 }
-
 
 fn draw_arc_mut(
     image: &mut RgbaImage,
@@ -430,10 +417,10 @@ fn rotate_point(point: Point<i32>, center: (i32, i32), angle_rad: f32) -> Point<
     let py = (point.y - center.1) as f32;
     let x_new = px * c - py * s;
     let y_new = px * s + py * c;
-    Point {
-        x: (x_new + center.0 as f32) as i32,
-        y: (y_new + center.1 as f32) as i32
-    }
+    Point::new(
+        (x_new + center.0 as f32) as i32,
+        (y_new + center.1 as f32) as i32
+    )
 }
 
 fn draw_centered_text_mut(img: &mut RgbaImage, color: Rgba<u8>, x: i32, y: i32, scale: Scale, font: &Font, text: &str) {

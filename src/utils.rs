@@ -78,11 +78,14 @@ fn distance_3d(p1: &Waypoint, p2: &Waypoint) -> f64 {
 
 pub fn calculate_speed_kmh(p1: &Waypoint, p2: &Waypoint) -> Option<f64> {
     let distance_m = distance_3d(p1, p2);
-    if let (Some(time1_str), Some(time2_str)) = (p1.time.as_ref().and_then(|t| t.format().ok()), p2.time.as_ref().and_then(|t| t.format().ok())) {
-        if let (Ok(time1), Ok(time2)) = (time1_str.parse::<DateTime<Utc>>(), time2_str.parse::<DateTime<Utc>>()) {
-            let time_diff_secs = (time2 - time1).num_seconds();
-            if time_diff_secs > 0 { 
-                return Some((distance_m / time_diff_secs as f64) * 3.6); 
+    
+    if let (Some(time1), Some(time2)) = (p1.time.as_ref(), p2.time.as_ref()) {
+        if let (Ok(time1_str), Ok(time2_str)) = (time1.format(), time2.format()) {
+            if let (Ok(parsed_time1), Ok(parsed_time2)) = (time1_str.parse::<DateTime<Utc>>(), time2_str.parse::<DateTime<Utc>>()) {
+                let time_diff_secs = (parsed_time2 - parsed_time1).num_seconds();
+                if time_diff_secs > 0 { 
+                    return Some((distance_m / time_diff_secs as f64) * 3.6); 
+                }
             }
         }
     }
@@ -96,14 +99,16 @@ pub fn calculate_g_force(p1: &Waypoint, p2: &Waypoint, p3: &Waypoint) -> Option<
     let speed1_mps = speed1_kmh / 3.6;
     let speed2_mps = speed2_kmh / 3.6;
 
-    if let (Some(time1_str), Some(time2_str)) = (p2.time.as_ref().and_then(|t| t.format().ok()), p3.time.as_ref().and_then(|t| t.format().ok())) {
-        if let (Ok(time1), Ok(time2)) = (time1_str.parse::<DateTime<Utc>>(), time2_str.parse::<DateTime<Utc>>()) {
-            let time_diff_secs = (time2 - time1).num_seconds();
+    if let (Some(time1), Some(time2)) = (p2.time.as_ref(), p3.time.as_ref()) {
+        if let (Ok(time1_str), Ok(time2_str)) = (time1.format(), time2.format()) {
+            if let (Ok(parsed_time1), Ok(parsed_time2)) = (time1_str.parse::<DateTime<Utc>>(), time2_str.parse::<DateTime<Utc>>()) {
+                let time_diff_secs = (parsed_time2 - parsed_time1).num_seconds();
 
-            if time_diff_secs > 0 {
-                let acceleration_mps2 = (speed2_mps - speed1_mps) / time_diff_secs as f64;
-                const STANDARD_GRAVITY: f64 = 9.80665;
-                return Some(acceleration_mps2 / STANDARD_GRAVITY);
+                if time_diff_secs > 0 {
+                    let acceleration_mps2 = (speed2_mps - speed1_mps) / time_diff_secs as f64;
+                    const STANDARD_GRAVITY: f64 = 9.80665;
+                    return Some(acceleration_mps2 / STANDARD_GRAVITY);
+                }
             }
         }
     }
@@ -131,24 +136,17 @@ pub fn calculate_bearing(p1: &Waypoint, p2: &Waypoint) -> f64 {
 fn interpolate_points(p1: &Waypoint, p2: &Waypoint, max_interval_secs: i64) -> Vec<Waypoint> {
     let mut interpolated_points = Vec::new();
     
-    let time1_str = match p1.time.as_ref().and_then(|t| t.format().ok()) {
-        Some(t) => t,
-        None => return interpolated_points,
+    let (time1_str, time2_str) = match (p1.time.as_ref(), p2.time.as_ref()) {
+        (Some(t1), Some(t2)) => match (t1.format(), t2.format()) {
+            (Ok(s1), Ok(s2)) => (s1, s2),
+            _ => return interpolated_points,
+        },
+        _ => return interpolated_points,
     };
     
-    let time2_str = match p2.time.as_ref().and_then(|t| t.format().ok()) {
-        Some(t) => t,
-        None => return interpolated_points,
-    };
-    
-    let time1 = match time1_str.parse::<DateTime<Utc>>() {
-        Ok(t) => t,
-        Err(_) => return interpolated_points,
-    };
-    
-    let time2 = match time2_str.parse::<DateTime<Utc>>() {
-        Ok(t) => t,
-        Err(_) => return interpolated_points,
+    let (time1, time2) = match (time1_str.parse::<DateTime<Utc>>(), time2_str.parse::<DateTime<Utc>>()) {
+        (Ok(t1), Ok(t2)) => (t1, t2),
+        _ => return interpolated_points,
     };
     
     let time_diff_secs = (time2 - time1).num_seconds();

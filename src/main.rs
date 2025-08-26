@@ -21,7 +21,7 @@ use std::path::PathBuf;
 use tower_http::services::ServeDir;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 use uuid::Uuid;
-use chrono::{DateTime, Utc, TimeZone};
+use chrono::{DateTime, Utc};
 use crate::tcx_adapter::TcxExtraData;
 use crate::strava_integration::{StravaClient, StravaConfig, StravaSession, StravaActivity};
 
@@ -425,7 +425,7 @@ async fn strava_download_activity(
             PointJson {
                 lat: p.point().y(),
                 lon: p.point().x(),
-                time: p.time.map(|t| Utc.from_utc_datetime(&t.to_utc().to_naive_utc()).to_rfc3339()),
+                time: p.time.as_ref().and_then(|t| t.format().ok()).map(|t| t.to_string()),
                 heart_rate,
                 cadence,
                 speed,
@@ -633,7 +633,14 @@ async fn suggest_sync_point(mut multipart: Multipart) -> Response {
                         
                         let first_point_after = interpolated_gpx
                             .tracks.iter().flat_map(|t| t.segments.iter()).flat_map(|s| s.points.iter())
-                            .find(|p| p.time.map_or(false, |pt| Utc.from_utc_datetime(&pt.to_utc().to_naive_utc()) > video_start_time));
+                            .find(|p| {
+                                if let Some(time) = p.time.as_ref().and_then(|t| t.format().ok()) {
+                                    if let Ok(parsed_time) = time.parse::<DateTime<Utc>>() {
+                                        return parsed_time > video_start_time;
+                                    }
+                                }
+                                false
+                            });
 
                         let (extra_data_json, sport_type) = if let Some(tcx_extra) = track_file_data.extra_data {
                             let json = TcxExtraDataJson {
@@ -660,7 +667,7 @@ async fn suggest_sync_point(mut multipart: Multipart) -> Response {
                                 PointJson {
                                     lat: p.point().y(),
                                     lon: p.point().x(),
-                                    time: p.time.map(|t| Utc.from_utc_datetime(&t.to_utc().to_naive_utc()).to_rfc3339()),
+                                    time: p.time.as_ref().and_then(|t| t.format().ok()).map(|t| t.to_string()),
                                     heart_rate,
                                     cadence,
                                     speed,
@@ -670,7 +677,7 @@ async fn suggest_sync_point(mut multipart: Multipart) -> Response {
 
                         if let Some(point) = first_point_after {
                             let point_coords = point.point();
-                            let timestamp_iso_str = Utc.from_utc_datetime(&point.time.unwrap().to_utc().to_naive_utc()).to_rfc3339();
+                            let timestamp_iso_str = point.time.as_ref().and_then(|t| t.format().ok()).unwrap_or_default();
 
                             let display_timestamp_str = if let Ok(utc_time) = timestamp_iso_str.parse::<DateTime<Utc>>() {
                                 let brt_offset = chrono::FixedOffset::west_opt(3 * 3600).unwrap();
